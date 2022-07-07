@@ -11,45 +11,34 @@ import {
     ForeignKey,
     AllowNull,
 } from 'sequelize-typescript';
+import { Json } from 'sequelize/types/utils';
 
 @Table({ timestamps: true })
-export default class User extends Model<User>{
+export default class Filter extends Model<Filter>{
     @PrimaryKey
     @AllowNull(false)
     @Column(DataType.UUID)
     id!: string;
 
     @AllowNull(false)
-    @Column(DataType.STRING(50))
-    name!: string;
+    @Column(DataType.UUID)
+    userID!: string;
     
     @AllowNull(false)
-    @Column(DataType.DATE)
-    birthDate!: string;
-
-    @AllowNull(false)
-    @Column(DataType.STRING(50))
-    phone!: string;
-
-    @AllowNull(false)
-    @Column(DataType.STRING(50))
-    gender!: string;
+    @Column(DataType.INTEGER)
+    age!: number;
 
     @AllowNull(false)
     @Column(DataType.FLOAT)
     height!: number;
 
     @AllowNull(false)
-    @Column(DataType.GEOGRAPHY)
-    last_location!: string;
+    @Column(DataType.INTEGER)
+    distance!: number;
 
     @AllowNull(false)
-    @Column(DataType.DATE)
-    last_active!: string;
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    isActive!: boolean;
+    @Column(DataType.STRING)
+    religion!: string;
 
     @CreatedAt
     creation_date!: Date;
