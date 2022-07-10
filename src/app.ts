@@ -24,4 +24,5 @@ app.get('/', (request: Request, response: Response) => {
 
 dbInitialize().then(() => {
     app.listen(SERVICE_PORT);
+    console.log(`listening on port ${SERVICE_PORT.toString()}`);
 });
