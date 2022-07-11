@@ -29,7 +29,12 @@ export default class User extends Model<User>{
 
     @AllowNull(false)
     @Column(DataType.STRING(50))
-    phone!: string;
+    get phone(): string {
+        return this.getDataValue('phone');
+    }
+    set phone(value: string) {
+        this.setDataValue('phone', value);
+    }
 
     @AllowNull(false)
     @Column(DataType.STRING(50))
