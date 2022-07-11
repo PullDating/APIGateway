@@ -65,7 +65,7 @@ Inputs:
 Outputs:
 - user_exists: boolean //tells the device if it is a new user or an existing one
 - uuid: string //the uuid of the user so that they can cache it on device
-- token: string //the token/key that is cached on the user's device that allows them to make calls to the rest of the api.
+- token: string //the api token/key that is cached on the user's device that allows them to make calls to the rest of the api.
 */
 app.post('/account/auth', async (req:Request,res:Response) => {
     //TODO add the functionality in another file and call it here.
