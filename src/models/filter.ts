@@ -1,3 +1,5 @@
+import Account from './account';
+
 import {
     Column,
     Table,
@@ -10,6 +12,7 @@ import {
     AutoIncrement,
     ForeignKey,
     AllowNull,
+    BelongsTo,
 } from 'sequelize-typescript';
 import { Json } from 'sequelize/types/utils';
 
@@ -17,8 +20,9 @@ import { Json } from 'sequelize/types/utils';
 export default class Filter extends Model<Filter>{
     @PrimaryKey
     @AllowNull(false)
+    @BelongsTo(() => Account)
     @Column(DataType.UUID)
-    id!: string;
+    uuid!: string;
 
     @AllowNull(false)
     @Column(DataType.UUID)

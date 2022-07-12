@@ -6,7 +6,13 @@ import { dbInitialize } from './db-connect';
 import router from './router';
 import { SERVICE_PORT } from './config';
 import { Request, Response, Router } from 'express';
-import User from './models/user';
+
+//sequelize models.
+import Account from './models/account';
+import Auth_Token from './models/auth_token';
+
+import { DoubleDataType, FloatDataType, GeographyDataType } from 'sequelize/types';
+import { DataType } from 'sequelize-typescript';
 
 export const app = express();
 app.use(helmet());
@@ -88,14 +94,21 @@ app.post('/account/auth', async (req:Request,res:Response) => {
     if (phone.match(/^1/)) phone = '+' + phone;
     if (!phone.match(/^\+/)) phone = '+1' + phone;
     //check to see if the user with the phone number already exists.
-    userExists:Boolean;
+    let userExists:boolean = false;
     try {
-        //const search = await User.findAll({
-        //    where: {
-        //        phone: phone
-        //    }
-        //});
-        //console.log(`search: ${search}`);
+        const search = await Account.findAll({
+            where: {
+                phone: phone
+            }
+        });
+        console.log(`search: ${search}`);
+        if(search.length == 0){
+            console.log("phone search result was empty");
+            userExists = false;
+        }else{
+            console.log("phone search result was not empty");
+            userExists = true;
+        }
     } catch (err:any) {
         console.error(err.stack);
         res.status(500).json({message: "Server error"});
@@ -103,12 +116,12 @@ app.post('/account/auth', async (req:Request,res:Response) => {
     }
 
     if(body.sms_code){ //if the sms code is entered.
-
+        
     }else{ //if the sms code is not entered
         
     }
 
-
+    res.json({result: "Eh. whatever"});
 });
 
 // /profile hosts api endpoints to do with managing, creating and deleting user profiles. 
@@ -121,17 +134,94 @@ Inputs:
 - bodytype: string
 - datinggoal: string
 - gender: string
-- height: double
+- height: float
 - name: string
 - photos: ?????
 - token: string
+- uuid: string
+- location: geography
 Outputs:
 - 
 */
-app.post('/profile/create', (req:Request, res:Response) => {
+app.post('/profile/create', async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
 
+    //Check the required inputs to make sure that none are missing. 
+    if (!req.headers.authorization) {
+        res.status(400).json({message: "Required parameter 'token' is missing. (You haven't supplied an authentication token, try calling /auth)"});
+        return;
+    }
+    if (!req.body.uuid) {
+        res.status(400).json({message: "Required parameter 'uuid' is missing. (You haven't supplied an uuid, try calling /auth)"});
+        return;
+    }
 
+    //verify that the two exist together in the auth table.
+    try {
+        const search = await Auth_Token.findAll({
+            where: {
+                token: req.body.token
+            }
+        });
+
+        if(search.length == 0 || search[0].uuid != req.body.uuid){
+            console.log("Either the entry did not exist, or the auth token was invalid.");
+            res.status(400).json({message: "Authentication Rejected"});
+        }
+
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+
+    //Continue checking the remaining required parameters.
+    if (!req.body.birthdate) {
+        res.status(400).json({message: "Required parameter 'birthdate' is missing."});
+        return;
+    }
+    if (!req.body.bodytype) {
+        res.status(400).json({message: "Required parameter 'bodytype' is missing."});
+        return;
+    }
+    if (!req.body.gender) {
+        res.status(400).json({message: "Required parameter 'gender' is missing."});
+        return;
+    }
+    if (!req.body.height) {
+        res.status(400).json({message: "Required parameter 'height' is missing."});
+        return;
+    }
+    if (!req.body.datinggoal) {
+        res.status(400).json({message: "Required parameter 'datinggoal' is missing."});
+        return;
+    }
+    if (!req.body.biography) {
+        res.status(400).json({message: "Required parameter 'biography' is missing."});
+        return;
+    }
+    //type check and store all the incoming request data. 
+    var name:string = req.body.name;
+    let location:GeographyDataType = req.body.location;
+    let uuid:string = req.body.uuid;
+    let birthdate:Date = req.body.birthdate;
+    let bodytype:string = req.body.bodytype;
+    let gender:string = req.body.gender;
+    let height:FloatDataType = req.body.height;
+    let datinggoal:string = req.body.datinggoal;
+    let biography:string = req.body.biography;
+
+});
+
+// /test stuff is just for messing around. Delete before pushing to main
+app.get('/test/1', (req:Request,res:Response) => {
+    
+    //this should not be this broken lol.
+    //Account.create({uuid: "something"})
+    //const person = new Account({uuid: "something"})
+    //person.save()
+    
+    res.json({result: "end of test"});
 });
 
 
