@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 
-import { addUser } from './db-manager';
+import { addAccount } from './db-manager';
 
 const router = Router();
 
@@ -14,7 +14,7 @@ async function addUserController(request: Request, response: Response) {
     const customerInfo = request.body;
     // USE JOI SCHEMA VALIDATION
     try {
-        await addUser(customerInfo);
+        await addAccount(customerInfo);
         console.log('Customer added succesfully!');
         return response.status(200).send('Customer added succesfully!').end();
     } catch (e) {

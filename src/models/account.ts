@@ -46,16 +46,13 @@ export default class Account extends Model<Account>{
 
     //timestamp the account was created 
     @CreatedAt
-    @AllowNull(false)
     creation_date!: Date;
 
     //timestamp the account was updated
     @UpdatedAt
-    @AllowNull(false)
     updated_on!: Date;
 
     //timestamp the account was deleted (if it was deleted).
     @DeletedAt
-    @AllowNull(true)
     deletion_date!: Date;
 }
