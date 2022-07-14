@@ -259,6 +259,15 @@ app.get('/people', async (req:Request, res:Response) => {
 
 });
 
+//allow a user to block another user
+app.post('/block', async (req:Request,res:Response)=>{
+
+})
+
+//returns the number of blocks on a user.
+app.get('/block/number', async (req:Request,res:Response)=>{
+
+})
 
 
 //allow a user to get all current likes on themselves

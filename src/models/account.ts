@@ -1,3 +1,5 @@
+import {v4 as uuidv4} from 'uuid';
+
 import {
     Column,
     Table,
@@ -20,7 +22,7 @@ export default class Account extends Model{
     //unique identifier for a user within the database.
     @PrimaryKey
     @AllowNull(false)
-    @Default(DataType.UUID)
+    @Default(uuidv4())
     @Column(DataType.UUID)
     uuid!: string;
     
