@@ -1,4 +1,6 @@
 import Account from './account';
+import {v4 as uuidv4} from 'uuid';
+import { DateTime } from "luxon";
 
 import {
     Column,
@@ -21,12 +23,13 @@ export default class Auth_Token extends Model{
     //api token is unique and is the primary key
     @PrimaryKey
     @AllowNull(false)
+    @Default(uuidv4())
     @Column(DataType.UUID)
     token!: string;
-    //user uuid
 
-    //But this can't work because the User entry would have to exist before this entry is generated, but this is used in the sign up process.
-    //@BelongsTo( () => User) //since each uuid should be in the User table.
+
+    //user uuid
+    @ForeignKey(() => Account)
     @AllowNull(false)
     @Column(DataType.UUID)
     uuid!: string;
@@ -35,5 +38,5 @@ export default class Auth_Token extends Model{
     //TODO add the default expiry date logic as the default?
     @AllowNull(false)
     @Column(DataType.DATE)
-    expiry!: Date;
+    expiry!: DateTime;
 }

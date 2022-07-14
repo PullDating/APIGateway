@@ -13,6 +13,9 @@ import Auth_Token from './models/auth_token';
 
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { DataType } from 'sequelize-typescript';
+import validate_auth from './components/validate_auth';
+
+import { DateTime } from "luxon";
 
 export const app = express();
 app.use(helmet());
@@ -115,11 +118,24 @@ app.post('/account/get_auth', async (req:Request,res:Response) => {
         return;
     }
 
+    //TODO hook this up with the firebase auth.
+
     if(body.sms_code){ //if the sms code is entered.
         
     }else{ //if the sms code is not entered
         
     }
+
+    //use this code to generate an auth_token for 1 year in future
+    /*
+    const auth = new Auth_Token({
+        uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
+        expiry: new Date().setFullYear(new Date().getFullYear() + 1)
+    });
+    auth.save();
+    */
+
+
 
     res.json({result: "Eh. whatever"});
 });
@@ -173,22 +189,18 @@ app.post('/profile', async (req:Request, res:Response) => {
     }
 
     //verify that the two exist together in the auth table.
+    let result:number = -1;
     try {
-        const search = await Auth_Token.findAll({
-            where: {
-                token: req.body.token
-            }
-        });
-
-        if(search.length == 0 || search[0].uuid != req.body.uuid){
-            console.log("Either the entry did not exist, or the auth token was invalid.");
-            res.status(400).json({message: "Authentication Rejected"});
-        }
-
+        result = await validate_auth(req.body.uuid, req.headers.authorization);
     } catch (err:any) {
         console.error(err.stack);
         res.status(500).json({message: "Server error"});
         return;
+    }
+
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
     }
 
     //Continue checking the remaining required parameters.
@@ -283,11 +295,17 @@ app.get('/matches')
 app.get('/test/1', async (req:Request,res:Response) => {
     
     //this should not be this broken lol.
-    const person = new Account({
-        phone: "62343212321",
-        state: 0,
+    //const person = new Account({
+    //    phone: "62343212321",
+    //    state: 0,
+    //});
+    //person.save();
+
+    const auth = new Auth_Token({
+        uuid: "11111111-1111-1111-1111-111111111111",
+        expiry: DateTime.now()//new Date().setFullYear(new Date().getFullYear() + 1)
     });
-    person.save();
+    auth.save();
     
     res.json({result: "end of test"});
 });
