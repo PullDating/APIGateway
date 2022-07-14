@@ -17,7 +17,7 @@ import { Json } from 'sequelize/types/utils';
 //We don't need both a match and swipe table, since a match is just a successful swipe (ie another state of a swipe)
 
 @Table({ timestamps: true })
-export default class Swipe extends Model<Swipe>{
+export default class Swipe extends Model{
 
     //The person who was the target of the interaction (ie the person getting swiped on, matched with, blocked etc.)
     @PrimaryKey

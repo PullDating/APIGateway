@@ -25,6 +25,7 @@ export async function dbInitialize() {
 
     console.log("created sequelize object");
     try {
+        Account.sync();
         return await sequelize.authenticate().then(() => sequelize.sync({ alter: true }));
     } catch (error) {
         console.error('Unable to connect to db:', error);

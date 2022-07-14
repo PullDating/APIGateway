@@ -17,7 +17,7 @@ import {
 import { Json } from 'sequelize/types/utils';
 
 @Table({ timestamps: true })
-export default class Filter extends Model<Filter>{
+export default class Filter extends Model{
     @PrimaryKey
     @AllowNull(false)
     @BelongsTo(() => Account)

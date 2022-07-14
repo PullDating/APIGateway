@@ -17,7 +17,7 @@ import {
 } from 'sequelize-typescript';
 
 @Table({ timestamps: true, updatedAt: false, })
-export default class Auth_Token extends Model<Auth_Token>{
+export default class Auth_Token extends Model{
     //api token is unique and is the primary key
     @PrimaryKey
     @AllowNull(false)

@@ -11,7 +11,7 @@ import { Request, Response, Router } from 'express';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
 
-import { DoubleDataType, FloatDataType, GeographyDataType } from 'sequelize/types';
+import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { DataType } from 'sequelize-typescript';
 
 export const app = express();
@@ -73,7 +73,7 @@ Outputs:
 - uuid: string //the uuid of the user so that they can cache it on device
 - token: string //the api token/key that is cached on the user's device that allows them to make calls to the rest of the api.
 */
-app.post('/account/auth', async (req:Request,res:Response) => {
+app.post('/account/get_auth', async (req:Request,res:Response) => {
     //TODO add the functionality in another file and call it here.
     
     const body = req.body;
@@ -124,6 +124,20 @@ app.post('/account/auth', async (req:Request,res:Response) => {
     res.json({result: "Eh. whatever"});
 });
 
+//to allow users to delete their account (set it to the deleted state)
+app.put('/account/delete', async (req:Request,res:Response) => {
+
+});
+
+//to allow the user to set their account to the paused state, to take them out of the active queue
+app.put('/account/pause', async (req:Request,res:Response) => {
+
+});
+
+//to allow the user to re-enter the active queue. 
+app.put('/account/unpause', async (req:Request, res:Response) => {
+
+})
 // /profile hosts api endpoints to do with managing, creating and deleting user profiles. 
 
 /*
@@ -143,8 +157,10 @@ Inputs:
 Outputs:
 - 
 */
-app.post('/profile/create', async (req:Request, res:Response) => {
+app.post('/profile', async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
+
+    //Remember to update the state in the account table.
 
     //Check the required inputs to make sure that none are missing. 
     if (!req.headers.authorization) {
@@ -213,13 +229,56 @@ app.post('/profile/create', async (req:Request, res:Response) => {
 
 });
 
+//to update an existing profile within the application.
+app.put('/profile', async (req:Request, res:Response) => {
+
+})
+
+//to allow a user application to receive information about their own profile.
+app.get('/profile', async (req:Request, res:Response) => {
+
+})
+
+//allow a user to "like" another person
+app.post('/swipe', async (req:Request, res:Response) => {
+
+});
+
+//set the filters for a profile for the first time 
+app.post('/filter', async (req:Request, res:Response) => {
+
+});
+
+//update the filters for a user
+app.put('/filter', async (req:Request, res:Response) => {
+
+})
+
+//return the top people that meet the user's filters.
+app.get('/people', async (req:Request, res:Response) => {
+
+});
+
+
+
+//allow a user to get all current likes on themselves
+app.get('/likes')
+
+//get all current matches
+app.get('/matches')
+
+
+
+
 // /test stuff is just for messing around. Delete before pushing to main
-app.get('/test/1', (req:Request,res:Response) => {
+app.get('/test/1', async (req:Request,res:Response) => {
     
     //this should not be this broken lol.
-    //Account.create({uuid: "something"})
-    //const person = new Account({uuid: "something"})
-    //person.save()
+    const person = new Account({
+        phone: "62343212321",
+        state: 0,
+    });
+    person.save();
     
     res.json({result: "end of test"});
 });

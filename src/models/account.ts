@@ -15,7 +15,7 @@ import {
 //import { DataType } from 'sequelize/types';
 
 @Table({ timestamps: true })
-export default class Account extends Model<Account>{
+export default class Account extends Model{
 
     //unique identifier for a user within the database.
     @PrimaryKey
@@ -41,18 +41,7 @@ export default class Account extends Model<Account>{
     // 3 : profile created, but account deleted by user
     @AllowNull(false)
     @Default(0)
-    @Column(DataType.NUMBER)
+    @Column(DataType.INTEGER)
     state!: number;
 
-    //timestamp the account was created 
-    @CreatedAt
-    creation_date!: Date;
-
-    //timestamp the account was updated
-    @UpdatedAt
-    updated_on!: Date;
-
-    //timestamp the account was deleted (if it was deleted).
-    @DeletedAt
-    deletion_date!: Date;
 }

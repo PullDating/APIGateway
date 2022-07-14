@@ -18,7 +18,7 @@ import {
 import { Json } from 'sequelize/types/utils';
 
 @Table({ timestamps: true })
-export default class Profile extends Model<Profile>{
+export default class Profile extends Model{
 
     //the uuid identifies the record as belonging to a specific user.
     @PrimaryKey
