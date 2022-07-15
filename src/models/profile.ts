@@ -1,4 +1,4 @@
-import User from './account';
+import Account from './account';
 
 import {
     Column,
@@ -16,13 +16,14 @@ import {
     Default
 } from 'sequelize-typescript';
 import { Json } from 'sequelize/types/utils';
+import { DateTime } from "luxon";
 
 @Table({ timestamps: true })
 export default class Profile extends Model{
 
     //the uuid identifies the record as belonging to a specific user.
     @PrimaryKey
-    @BelongsTo(() => User)
+    @ForeignKey(() => Account)
     @AllowNull(false)
     @Column(DataType.UUID)
     uuid!: string;
@@ -35,7 +36,7 @@ export default class Profile extends Model{
     //the birthdate of the person, used to find the age
     @AllowNull(false)
     @Column(DataType.DATE)
-    birthDate!: string;
+    birthDate!: DateTime;
 
     //the gender of the user
     @AllowNull(false)
@@ -48,9 +49,9 @@ export default class Profile extends Model{
     height!: number;
 
     //this points to the image paths within the Minio image store.
-    @AllowNull(false)
-    @Column(DataType.JSONB)
-    imagePath!: any;
+    //@AllowNull(false)
+    //@Column(DataType.JSONB)
+    //imagePath!: any;
 
     //holds the dating goal of the user
     @AllowNull(false)
@@ -67,21 +68,16 @@ export default class Profile extends Model{
     @Column(DataType.STRING)
     bodyType!: string;
 
-    //holds the religion of the user
-    @AllowNull(false)
-    @Column(DataType.STRING)
-    religion!: string;
-
     //the most recent location of the user
     @AllowNull(false)
-    @Column(DataType.GEOGRAPHY)
+    @Column(DataType.GEOMETRY) //geometry because we are using a 2d plane.
     last_location!: string;
 
     //the last time that the user was active.
     @AllowNull(false)
     @Default(Date.now)
     @Column(DataType.DATE)
-    last_active!: string;
+    last_active!: DateTime;
 
     //whether the user is currently active or not
     @AllowNull(false)

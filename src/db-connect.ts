@@ -3,6 +3,7 @@ import { DB_NAME, DB_PASS, DB_URL, DB_USER } from "./config";
 import * as path from 'path';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
+import Profile from './models/profile';
 
 export async function dbInitialize() {
     console.log("Attempting to initialize the database");
@@ -21,7 +22,7 @@ export async function dbInitialize() {
         dialect: 'postgres'
     });
 
-    sequelize.addModels([Account,Auth_Token]);
+    sequelize.addModels([Account,Auth_Token,Profile]);
 
     console.log("created sequelize object");
     try {

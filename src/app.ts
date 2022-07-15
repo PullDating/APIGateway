@@ -10,6 +10,7 @@ import { Request, Response, Router } from 'express';
 //sequelize models.
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
+import Profile from './models/profile';
 
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { DataType } from 'sequelize-typescript';
@@ -160,7 +161,7 @@ app.put('/account/unpause', async (req:Request, res:Response) => {
 - Takes the inputs from the profile creation process within the flutter application and adds the information to the user table within the database.
 Inputs: 
 - biography: string
-- birthdate: Date
+- birthdate: string
 - bodytype: string
 - datinggoal: string
 - gender: string
@@ -169,7 +170,8 @@ Inputs:
 - photos: ?????
 - token: string
 - uuid: string
-- location: geography
+- latitude: float
+- longitude: float
 Outputs:
 - 
 */
@@ -204,6 +206,10 @@ app.post('/profile', async (req:Request, res:Response) => {
     }
 
     //Continue checking the remaining required parameters.
+    if (!req.body.name) {
+        res.status(400).json({message: "Required parameter 'name' is missing."});
+        return;
+    }
     if (!req.body.birthdate) {
         res.status(400).json({message: "Required parameter 'birthdate' is missing."});
         return;
@@ -228,17 +234,43 @@ app.post('/profile', async (req:Request, res:Response) => {
         res.status(400).json({message: "Required parameter 'biography' is missing."});
         return;
     }
+    if (!req.body.latitude) {
+        res.status(400).json({message: "Required parameter 'latitude' is missing."});
+        return;
+    }
+    if (!req.body.longitude) {
+        res.status(400).json({message: "Required parameter 'longitude' is missing."});
+        return;
+    }
     //type check and store all the incoming request data. 
     var name:string = req.body.name;
-    let location:GeographyDataType = req.body.location;
+    let longitude:number = req.body.longitude;
+    let latitude:number = req.body.latitude;
     let uuid:string = req.body.uuid;
-    let birthdate:Date = req.body.birthdate;
+    let birthdate:DateTime = req.body.birthdate;
     let bodytype:string = req.body.bodytype;
     let gender:string = req.body.gender;
     let height:FloatDataType = req.body.height;
     let datinggoal:string = req.body.datinggoal;
     let biography:string = req.body.biography;
 
+    const profile = new Profile({
+        uuid: uuid,
+        name: name,
+        birthDate: birthdate,
+        gender: gender,
+        height: height,
+        //imagePath: {},
+        datingGoal: datinggoal,
+        bio: biography,
+        bodyType: bodytype,
+        last_location: { type: 'Point', coordinates: [longitude,latitude]},
+        last_active: DateTime.now(),
+        isActive: true
+    });
+    profile.save();
+
+    res.json({message: "Profile created."});
 });
 
 //to update an existing profile within the application.
