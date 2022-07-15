@@ -35,5 +35,7 @@ export default async function validate_auth(uuid:string,token:string) : Promise<
         }
         //console.log("authentication successful");
 
+        //TODO should check here if they have an entry in the profile table and if so, then update their last active field. 
+
         return 0;
 }

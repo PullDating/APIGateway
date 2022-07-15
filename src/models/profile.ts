@@ -73,18 +73,6 @@ export default class Profile extends Model{
     @Column(DataType.GEOMETRY) //geometry because we are using a 2d plane.
     last_location!: string;
 
-    //the last time that the user was active.
-    @AllowNull(false)
-    @Default(Date.now)
-    @Column(DataType.DATE)
-    last_active!: DateTime;
-
-    //whether the user is currently active or not
-    @AllowNull(false)
-    @Default(true)
-    @Column(DataType.BOOLEAN)
-    isActive!: boolean;    
-
     //time the profile entry was created
     @CreatedAt
     creation_date!: Date;
@@ -97,3 +85,4 @@ export default class Profile extends Model{
     @DeletedAt
     deletion_date!: Date;
 }
+

@@ -18,6 +18,11 @@ import validate_auth from './components/validate_auth';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
+import { privateEncrypt } from 'crypto';
+const Joi = require('joi');
+
+
+
 
 export const app = express();
 app.use(helmet());
@@ -27,14 +32,32 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/', router);
 
-/*
-app.get('/', (request: Request, response: Response) => {
-    response.send('Hello World! I\'m William!')
-})
-*/
-/**app.get('/health', (request: Request, response: Response) => {
-    response.status(200).send('App running').end();
-});**/
+//joi schemas
+
+const create_profile_schema = Joi.object({
+    uuid: Joi.string().guid().required(),
+    //name: Joi.string().alphanum().max(50).required(),
+    //birthDate: Joi.date().required(),
+    //gender: Joi.string().valid('man','woman','non-binary').required(),
+    //height: Joi.number().min(0).max(304.8).required(),
+    //imagePath: Joi.object().keys({
+    //    0 : Joi.link().required(),
+    //    1 : Joi.link().required(),
+    //    2 : Joi.link().required(),
+    //    3 : Joi.link(),
+    //    4 : Joi.link(),
+    //    5 : Joi.link(),
+    //    6 : Joi.link(),
+    //    7 : Joi.link(),
+    //    8 : Joi.link(),
+    //    9 : Joi.link(),
+    //}),
+    //datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
+    //bio: Joi.string().max(300).required(),
+    //bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese'),
+    //longitude: Joi.number().required(),
+    //latitude: Joi.number().required(),
+});//.with('uuid' /*, 'name','birthDate','gender','height','imagePath','datingGoal','bio','bodyType','latitude','longitude'*/);
 
 //Template for comments, copy and use the below 
 
@@ -181,6 +204,18 @@ app.post('/profile', async (req:Request, res:Response) => {
 
     //Remember to update the state in the account table.
 
+    console.log(req.body);
+    
+    
+    try {
+        const value = await create_profile_schema.validateAsync(req.body)
+    } catch (err){
+        console.log("There was an error")
+    }
+
+    res.json({message: "Profile NOT created."});
+    return;
+
     //Check the required inputs to make sure that none are missing. 
     if (!req.headers.authorization) {
         res.status(400).json({message: "Required parameter 'token' is missing. (You haven't supplied an authentication token, try calling /auth)"});
@@ -194,7 +229,7 @@ app.post('/profile', async (req:Request, res:Response) => {
     //verify that the two exist together in the auth table.
     let result:number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization);
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
     } catch (err:any) {
         console.error(err.stack);
         res.status(500).json({message: "Server error"});
@@ -243,7 +278,7 @@ app.post('/profile', async (req:Request, res:Response) => {
         res.status(400).json({message: "Required parameter 'longitude' is missing."});
         return;
     }
-    if (!req.body.photos) {
+    if (!req.body.photos || req.body.photos == '{}') {
         res.status(400).json({message: "Required parameter 'photos' is missing."});
         return;
     }
@@ -271,8 +306,6 @@ app.post('/profile', async (req:Request, res:Response) => {
         bio: biography,
         bodyType: bodytype,
         last_location: { type: 'Point', coordinates: [longitude,latitude]},
-        last_active: DateTime.now(),
-        isActive: true
     });
     profile.save();
 
@@ -329,7 +362,7 @@ app.get('/matches')
 
 
 
-// /test stuff is just for messing around. Delete before pushing to main
+// /test stuff is just for messing around. Delete before pushing to main/production
 app.get('/test/1', async (req:Request,res:Response) => {
     
     //this should not be this broken lol.
@@ -339,14 +372,26 @@ app.get('/test/1', async (req:Request,res:Response) => {
     //});
     //person.save();
 
-    const auth = new Auth_Token({
-        uuid: "11111111-1111-1111-1111-111111111111",
-        expiry: DateTime.now()//new Date().setFullYear(new Date().getFullYear() + 1)
-    });
-    auth.save();
+    //const auth = new Auth_Token({
+    //    uuid: "11111111-1111-1111-1111-111111111111",
+    //    expiry: DateTime.now()//new Date().setFullYear(new Date().getFullYear() + 1)
+    //});
+    //auth.save();
     
-    res.json({result: "end of test"});
+    //res.json({result: "end of test"});
 });
+
+app.get('/test/2', async (req:Request,res:Response)=> {
+    /*
+    const account = new Account({
+        uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
+        phone: "1234231231",
+        last_active: DateTime.now(),
+        state: 0
+    });
+    account.save();
+    */
+})
 
 
 

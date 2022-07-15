@@ -1,4 +1,5 @@
 import {v4 as uuidv4} from 'uuid';
+import { DateTime } from "luxon";
 
 import {
     Column,
@@ -35,6 +36,12 @@ export default class Account extends Model{
     set phone(value: string) {
         this.setDataValue('phone', value);
     }
+
+    //the last time that the user was active.
+    @AllowNull(false)
+    @Default(Date.now)
+    @Column(DataType.DATE)
+    last_active!: DateTime;
 
     //the state of the account.
     // 0 : just created, profile not complete & not active
