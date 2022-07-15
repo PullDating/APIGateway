@@ -17,6 +17,7 @@ import { DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 
 import { DateTime } from "luxon";
+import { Json } from 'sequelize/types/utils';
 
 export const app = express();
 app.use(helmet());
@@ -242,6 +243,10 @@ app.post('/profile', async (req:Request, res:Response) => {
         res.status(400).json({message: "Required parameter 'longitude' is missing."});
         return;
     }
+    if (!req.body.photos) {
+        res.status(400).json({message: "Required parameter 'photos' is missing."});
+        return;
+    }
     //type check and store all the incoming request data. 
     var name:string = req.body.name;
     let longitude:number = req.body.longitude;
@@ -253,6 +258,7 @@ app.post('/profile', async (req:Request, res:Response) => {
     let height:FloatDataType = req.body.height;
     let datinggoal:string = req.body.datinggoal;
     let biography:string = req.body.biography;
+    let photos:any = req.body.photos;
 
     const profile = new Profile({
         uuid: uuid,
@@ -260,7 +266,7 @@ app.post('/profile', async (req:Request, res:Response) => {
         birthDate: birthdate,
         gender: gender,
         height: height,
-        //imagePath: {},
+        imagePath: photos,
         datingGoal: datinggoal,
         bio: biography,
         bodyType: bodytype,

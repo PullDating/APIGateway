@@ -49,9 +49,9 @@ export default class Profile extends Model{
     height!: number;
 
     //this points to the image paths within the Minio image store.
-    //@AllowNull(false)
-    //@Column(DataType.JSONB)
-    //imagePath!: any;
+    @AllowNull(false)
+    @Column(DataType.JSONB)
+    imagePath!: any;
 
     //holds the dating goal of the user
     @AllowNull(false)
