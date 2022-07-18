@@ -19,6 +19,7 @@ import validate_auth from './components/validate_auth';
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
+import { any } from 'joi';
 const Joi = require('joi');
 
 
@@ -35,28 +36,29 @@ app.use('/', router);
 //joi schemas
 
 const create_profile_schema = Joi.object({
+    token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    //name: Joi.string().alphanum().max(50).required(),
-    //birthDate: Joi.date().required(),
-    //gender: Joi.string().valid('man','woman','non-binary').required(),
-    //height: Joi.number().min(0).max(304.8).required(),
-    //imagePath: Joi.object().keys({
-    //    0 : Joi.link().required(),
-    //    1 : Joi.link().required(),
-    //    2 : Joi.link().required(),
-    //    3 : Joi.link(),
-    //    4 : Joi.link(),
-    //    5 : Joi.link(),
-    //    6 : Joi.link(),
-    //    7 : Joi.link(),
-    //    8 : Joi.link(),
-    //    9 : Joi.link(),
-    //}),
-    //datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
-    //bio: Joi.string().max(300).required(),
-    //bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese'),
-    //longitude: Joi.number().required(),
-    //latitude: Joi.number().required(),
+    name: Joi.string().alphanum().max(50).required(),
+    birthDate: Joi.date().required(),
+    gender: Joi.string().valid('man','woman','non-binary').required(),
+    height: Joi.number().min(0).max(304.8).required(),
+    imagePath: Joi.object().keys({
+        0 : Joi.link().required(),
+        1 : Joi.link().required(),
+        2 : Joi.link().required(),
+        3 : Joi.link(),
+        4 : Joi.link(),
+        5 : Joi.link(),
+        6 : Joi.link(),
+        7 : Joi.link(),
+        8 : Joi.link(),
+        9 : Joi.link(),
+    }),
+    datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
+    biography: Joi.string().max(300).required(),
+    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese'),
+    longitude: Joi.number().required(),
+    latitude: Joi.number().required(),
 });//.with('uuid' /*, 'name','birthDate','gender','height','imagePath','datingGoal','bio','bodyType','latitude','longitude'*/);
 
 //Template for comments, copy and use the below 
@@ -203,27 +205,12 @@ app.post('/profile', async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
 
     //Remember to update the state in the account table.
+    let input = Object.assign(req.body, {token : req.headers.authorization});
 
-    console.log(req.body);
-    
-    
     try {
-        const value = await create_profile_schema.validateAsync(req.body)
+        const value = await create_profile_schema.validateAsync(input)
     } catch (err){
-        console.log("There was an error")
-    }
-
-    res.json({message: "Profile NOT created."});
-    return;
-
-    //Check the required inputs to make sure that none are missing. 
-    if (!req.headers.authorization) {
-        res.status(400).json({message: "Required parameter 'token' is missing. (You haven't supplied an authentication token, try calling /auth)"});
-        return;
-    }
-    if (!req.body.uuid) {
-        res.status(400).json({message: "Required parameter 'uuid' is missing. (You haven't supplied an uuid, try calling /auth)"});
-        return;
+        console.log(err)
     }
 
     //verify that the two exist together in the auth table.
@@ -235,77 +222,25 @@ app.post('/profile', async (req:Request, res:Response) => {
         res.status(500).json({message: "Server error"});
         return;
     }
-
+    //if invalid, return without completing. 
     if(result != 0){
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
     }
 
-    //Continue checking the remaining required parameters.
-    if (!req.body.name) {
-        res.status(400).json({message: "Required parameter 'name' is missing."});
-        return;
-    }
-    if (!req.body.birthdate) {
-        res.status(400).json({message: "Required parameter 'birthdate' is missing."});
-        return;
-    }
-    if (!req.body.bodytype) {
-        res.status(400).json({message: "Required parameter 'bodytype' is missing."});
-        return;
-    }
-    if (!req.body.gender) {
-        res.status(400).json({message: "Required parameter 'gender' is missing."});
-        return;
-    }
-    if (!req.body.height) {
-        res.status(400).json({message: "Required parameter 'height' is missing."});
-        return;
-    }
-    if (!req.body.datinggoal) {
-        res.status(400).json({message: "Required parameter 'datinggoal' is missing."});
-        return;
-    }
-    if (!req.body.biography) {
-        res.status(400).json({message: "Required parameter 'biography' is missing."});
-        return;
-    }
-    if (!req.body.latitude) {
-        res.status(400).json({message: "Required parameter 'latitude' is missing."});
-        return;
-    }
-    if (!req.body.longitude) {
-        res.status(400).json({message: "Required parameter 'longitude' is missing."});
-        return;
-    }
-    if (!req.body.photos || req.body.photos == '{}') {
-        res.status(400).json({message: "Required parameter 'photos' is missing."});
-        return;
-    }
-    //type check and store all the incoming request data. 
-    var name:string = req.body.name;
-    let longitude:number = req.body.longitude;
-    let latitude:number = req.body.latitude;
-    let uuid:string = req.body.uuid;
-    let birthdate:DateTime = req.body.birthdate;
-    let bodytype:string = req.body.bodytype;
-    let gender:string = req.body.gender;
-    let height:FloatDataType = req.body.height;
-    let datinggoal:string = req.body.datinggoal;
-    let biography:string = req.body.biography;
-    let photos:any = req.body.photos;
+    //logic unique to this function.....
 
     const profile = new Profile({
-        uuid: uuid,
-        name: name,
-        birthDate: birthdate,
-        gender: gender,
-        height: height,
-        imagePath: photos,
-        datingGoal: datinggoal,
-        bio: biography,
-        bodyType: bodytype,
-        last_location: { type: 'Point', coordinates: [longitude,latitude]},
+        uuid: req.body.uuid,
+        name: req.body.name,
+        birthDate: req.body.birthDate,
+        gender: req.body.gender,
+        height: req.body.height,
+        imagePath: req.body.photos,
+        datingGoal: req.body.datingGoal,
+        biography: req.body.biography,
+        bodyType: req.body.bodyType,
+        lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
     });
     profile.save();
 

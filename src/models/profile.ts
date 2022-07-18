@@ -61,7 +61,7 @@ export default class Profile extends Model{
     //stores the biography written by the user
     @AllowNull(false)
     @Column(DataType.STRING(300))
-    bio!: string;
+    biography!: string;
 
     //stores the body type of the user
     @AllowNull(false)
@@ -71,7 +71,7 @@ export default class Profile extends Model{
     //the most recent location of the user
     @AllowNull(false)
     @Column(DataType.GEOMETRY) //geometry because we are using a 2d plane.
-    last_location!: string;
+    lastLocation!: string;
 
     //time the profile entry was created
     @CreatedAt
