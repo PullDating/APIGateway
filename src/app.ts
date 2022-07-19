@@ -82,6 +82,12 @@ const update_profile_schema = Joi.object({
     latitude: Joi.number().optional(),
 });
 
+const simple_get_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    target: Joi.string().guid().optional()
+});
+
 //Template for comments, copy and use the below 
 
 /*
@@ -353,14 +359,70 @@ app.put('/profile', async (req:Request, res:Response) => {
         }
         await profile.save();
     } else {
-        console.log("User account not found, couldn't update state");
+        console.log("User profile not found, couldn't update state");
     }
 
     res.json({message: "Profile updated."});
 })
 
-//to allow a user application to receive information about their own profile.
+//to allow a user application to receive information about their own profile, or another.
+/*
+inputs:
+- target: string, tells who's profile they are trying to get (uuid)
+outputs:
+- profile object. 
+*/
+
 app.get('/profile', async (req:Request, res:Response) => {
+
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
+    }
+    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    try {
+        const value = await simple_get_schema.validateAsync(input)
+    } catch (err){
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
+    }
+
+    console.log("Got past schema validation.")
+
+    //still doing authentication to prevent spammed requests. 
+
+    //verify that the two exist together in the auth table.
+    let result:number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+    //if invalid, return without completing. 
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
+    }
+
+    let profile:any;
+    if(req.body.target){ //return the profile of the target
+        profile = await Profile.findOne({ where: { uuid: req.body.target } });
+    }else{ //return the profile of the person that made the call
+        profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+    }
+    if(profile){
+        //console.log(profile);
+        res.json({profile});
+    } else {
+        res.json({error: "User profile could not be found."});
+    }
+
+    
+
 
 })
 
