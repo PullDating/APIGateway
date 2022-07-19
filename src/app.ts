@@ -20,6 +20,7 @@ import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
+import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
 const Joi = require('joi');
 
 export const app = express();
@@ -207,13 +208,13 @@ app.put('/account/unpause', async (req:Request, res:Response) => {
 - Takes the inputs from the profile creation process within the flutter application and adds the information to the user table within the database.
 Inputs: 
 - biography: string
-- birthdate: string
-- bodytype: string
-- datinggoal: string
+- birthDate: string
+- bodyType: string
+- datingGoal: string
 - gender: string
 - height: float
 - name: string
-- photos: ?????
+- imagePath: ?????
 - token: string
 - uuid: string
 - latitude: float
@@ -224,7 +225,7 @@ Outputs:
 app.post('/profile', async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
 
-    //Remember to update the state in the account table.
+    
     if(req.headers.authorization == null){
         res.json({error: "Authentication token was not supplied."});
         return
@@ -258,6 +259,8 @@ app.post('/profile', async (req:Request, res:Response) => {
 
     //logic unique to this function.....
 
+
+    //create profile entry.
     const profile = new Profile({
         uuid: req.body.uuid,
         name: req.body.name,
@@ -272,18 +275,38 @@ app.post('/profile', async (req:Request, res:Response) => {
     });
     profile.save();
 
+    //update the state in the account table to 1.
+    const account = await Account.findOne({ where: { uuid: req.body.uuid } });
+    if (account) {
+        account.state = 1;
+        await account.save();
+    } else {
+        console.log("User account not found, couldn't update state");
+    }
+
     res.json({message: "Profile created."});
 });
 
 //to update an existing profile within the application.
 app.put('/profile', async (req:Request, res:Response) => {
-    let input = Object.assign(req.body, {token : req.headers.authorization});
-    try {
-        const value = await update_profile_schema.validateAsync(input)
-        console.log(value)
-    } catch (err){
-        console.log(err)
+
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
     }
+    //let value:any;
+    let value:any;
+    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    try {
+        value = await update_profile_schema.validateAsync(input)
+    } catch (err){
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
+    }
+
+    console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
     let result:number = -1;
@@ -298,6 +321,45 @@ app.put('/profile', async (req:Request, res:Response) => {
     if(result != 0){
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
+    }
+
+    console.log("printing value");
+    console.log(value!);
+
+    const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+    if (profile) {
+        if(value['name']){
+            profile.name = value['name']
+        }
+        if(value['birthDate']){
+            profile.birthDate = value['birthDate']
+        }
+        if(value['gender']){
+            profile.gender = value['birthDate']
+        }
+        if(value['height']){
+            profile.height = value['height']
+        }
+        if(value['imagePath']){
+            profile.imagePath = value['imagePath']
+        }
+        if(value['datingGoal']){
+            profile.datingGoal = value['datingGoal']
+        }
+        if(value['biography']){
+            profile.biography = value['biography']
+        }
+        if(value['bodyType']){
+            profile.bodyType = value['bodyType']
+        }
+        if(value['longitude'] && value['latitude']){
+            const long:number = value['longitude']
+            const lat:number = value['latitude']
+            profile.lastLocation = { type: 'Point', coordinates: [long,lat] }
+        }
+        await profile.save();
+    } else {
+        console.log("User account not found, couldn't update state");
     }
 
     res.json({message: "Profile updated."});

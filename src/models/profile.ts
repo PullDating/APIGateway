@@ -71,7 +71,7 @@ export default class Profile extends Model{
     //the most recent location of the user
     @AllowNull(false)
     @Column(DataType.GEOMETRY) //geometry because we are using a 2d plane.
-    lastLocation!: string;
+    lastLocation!: any;
 
     //time the profile entry was created
     @CreatedAt
