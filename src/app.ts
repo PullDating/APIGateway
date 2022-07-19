@@ -328,12 +328,6 @@ app.put('/profile', async (req:Request, res:Response) => {
 
     const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
     if (profile) {
-        if(value['name']){
-            profile.name = value['name']
-        }
-        if(value['birthDate']){
-            profile.birthDate = value['birthDate']
-        }
         if(value['gender']){
             profile.gender = value['birthDate']
         }
