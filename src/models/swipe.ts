@@ -26,9 +26,10 @@ export default class Swipe extends Model{
     target_uuid!: string;
 
     //The person who initated the interaction. 
+    @PrimaryKey
     @AllowNull(false)
     @Column(DataType.UUID)
-    sender_uuid!: string;
+    uuid!: string;
 
     //Represents the state of the interaction between two people
     // 0 : dislike
@@ -36,8 +37,10 @@ export default class Swipe extends Model{
     // 2 : match
     // 3 : unmatch
     // 4 : block
+
+    //may need to add more based on stats we received as feedback. 
     @AllowNull(false)
-    @Column(DataType.NUMBER)
+    @Column(DataType.INTEGER)
     type!: number;
 
     @CreatedAt

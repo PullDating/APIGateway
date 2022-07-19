@@ -11,9 +11,10 @@ import { Request, Response, Router } from 'express';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
+import Swipe from './models/swipe';
 
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
-import { DataType } from 'sequelize-typescript';
+import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 
 import { DateTime } from "luxon";
@@ -86,6 +87,13 @@ const simple_get_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     target: Joi.string().guid().optional()
+});
+
+const swipe_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    target_uuid: Joi.string().guid().required(),
+    type: Joi.number().valid(0,1,3,4).required()
 });
 
 //Template for comments, copy and use the below 
@@ -420,15 +428,166 @@ app.get('/profile', async (req:Request, res:Response) => {
     } else {
         res.json({error: "User profile could not be found."});
     }
-
-    
-
-
 })
 
 //allow a user to "like" another person
 app.post('/swipe', async (req:Request, res:Response) => {
+    //authentication
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
+    }
+    //let value:any;
+    let value:any;
+    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    try {
+        value = await swipe_schema.validateAsync(input)
+    } catch (err){
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
+    }
 
+    console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result:number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+    //if invalid, return without completing. 
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
+    }
+
+    //TODO, at some point, add a check to make sure they aren't swiping on themselves.
+
+    //function specific logic ---------------------
+
+    //we keep track of both entries becuase we want to have a sense of possession as well as state.
+
+    const sentswipe = await Swipe.findOne({where: {uuid: req.body.uuid, target_uuid: req.body.target_uuid}});
+    const receivedswipe = await Swipe.findOne({where: {uuid: req.body.target_uuid, target_uuid: req.body.uuid}});
+
+    //2 is not possible because you cannot force a match, it is done through likes. 
+    switch(req.body.type){
+        case 0: //dislike
+            if(!sentswipe){ //if no previous swipe, send a dislike. 
+                Swipe.create({
+                    target_uuid: req.body.target_uuid,
+                    uuid: req.body.uuid,
+                    type: 0
+                })
+            }
+            break;
+        case 1: //like
+            if(!sentswipe){ //if no previous swipe, send a like
+                Swipe.create({
+                    target_uuid: req.body.target_uuid,
+                    uuid: req.body.uuid,
+                    type: 1
+                })
+                //then see if the other person has liked you
+                if(receivedswipe && receivedswipe['type'] == 1){
+                    //congrats, you have a match.
+                    //update your like to a match.
+                    Swipe.update(
+                        {
+                            type: 2
+                        },
+                        { where: {
+                            target_uuid: req.body.target_uuid,
+                            uuid: req.body.uuid,
+                        } }
+                    )
+                    //update their like to a match.
+                    Swipe.update(
+                        {
+                            type: 2
+                        },
+                        { where: {
+                            target_uuid: req.body.uuid,
+                            uuid: req.body.target_uuid,
+                        } }
+                    )
+                }
+            } else if(sentswipe && sentswipe!['type'] == 0){ //allow them to upgrade a dislike to a like.
+                Swipe.update(
+                    {
+                        type: 1
+                    },
+                    { where: {
+                        target_uuid: req.body.target_uuid,
+                        uuid: req.body.uuid,
+                    } }
+                  )
+            }
+            break;
+        case 3: //unmatch
+            //update both entries to unmatched. sad...
+            Swipe.update(
+                {
+                   type: 3
+                },
+                { where: {
+                    target_uuid: req.body.target_uuid,
+                    uuid: req.body.uuid,
+                } }
+            )
+            Swipe.update(
+                {
+                    type: 3
+                },
+                { where: {
+                    target_uuid: req.body.uuid,
+                    uuid: req.body.target_uuid,
+                } }
+            )
+            break;
+        case 4: //block
+            //update entry to be blocking the other person. 
+            //if the other person's entry is matched, change to unmatched
+            if(receivedswipe && receivedswipe['type'] == 2){
+                Swipe.update(
+                    {
+                        type: 3 //set to unmatched.
+                    },
+                    {
+                        where: {
+                            uuid: req.body.target_uuid,
+                            target_uuid: req.body.uuid
+                        }
+                    }
+                )
+            }
+
+            if(!sentswipe){
+                Swipe.create({
+                    target_uuid: req.body.target_uuid,
+                    uuid: req.body.uuid,
+                    type: 4
+                })
+            } else {
+                Swipe.update(
+                    {
+                       type: 4
+                    },
+                    { where: {
+                        target_uuid: req.body.target_uuid,
+                        uuid: req.body.uuid,
+                    } }
+                 )
+            }
+            
+            break;
+    }
+    res.json({message: "Swipe Executed"});
 });
 
 //set the filters for a profile for the first time 
@@ -470,30 +629,28 @@ app.get('/matches')
 app.get('/test/1', async (req:Request,res:Response) => {
     
     //this should not be this broken lol.
-    //const person = new Account({
-    //    phone: "62343212321",
+    //const person = Account.create({
+    //    phone: "6123273482",
     //    state: 0,
     //});
-    //person.save();
 
-    //const auth = new Auth_Token({
-    //    uuid: "11111111-1111-1111-1111-111111111111",
-    //    expiry: DateTime.now()//new Date().setFullYear(new Date().getFullYear() + 1)
-    //});
-    //auth.save();
+    const auth = new Auth_Token({
+        uuid: "311b8f93-a76e-48ba-97cb-c995d0dc918c",
+        expiry: DateTime.local(2025, 2, 11, 11, 11, 11, 11)//new Date().setFullYear(new Date().getFullYear() + 1)
+    });
+    auth.save();
     
     //res.json({result: "end of test"});
 });
 
 app.get('/test/2', async (req:Request,res:Response)=> {
     /*
-    const account = new Account({
+    const swipe = new Swipe({
         uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
-        phone: "1234231231",
-        last_active: DateTime.now(),
-        state: 0
+        target_uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
+        type: 0,
     });
-    account.save();
+    swipe.save();
     */
 })
 

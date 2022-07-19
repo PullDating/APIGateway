@@ -2,6 +2,7 @@ import { privateEncrypt } from 'crypto';
 import { DataType } from 'sequelize-typescript';
 import Auth_Token from '../models/auth_token';
 import { DateTime } from "luxon";
+import Account from '../models/account';
 
 /*
 Function to determine if the uuid/token combination entered in an api call is valid. It will return -1 if it is not, 0 if it is.
@@ -35,7 +36,17 @@ export default async function validate_auth(uuid:string,token:string) : Promise<
         }
         //console.log("authentication successful");
 
-        //TODO should check here if they have an entry in the profile table and if so, then update their last active field. 
+        //update last active
+        Account.update(
+            {
+                last_active: DateTime.now()
+            },
+            {
+                where: {
+                    uuid: uuid,
+                }
+            }
+        )
 
         return 0;
 }
