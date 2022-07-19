@@ -22,9 +22,6 @@ import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
 const Joi = require('joi');
 
-
-
-
 export const app = express();
 app.use(helmet());
 app.use(compression());
@@ -43,23 +40,46 @@ const create_profile_schema = Joi.object({
     gender: Joi.string().valid('man','woman','non-binary').required(),
     height: Joi.number().min(0).max(304.8).required(),
     imagePath: Joi.object().keys({
-        0 : Joi.link().required(),
-        1 : Joi.link().required(),
-        2 : Joi.link().required(),
-        3 : Joi.link(),
-        4 : Joi.link(),
-        5 : Joi.link(),
-        6 : Joi.link(),
-        7 : Joi.link(),
-        8 : Joi.link(),
-        9 : Joi.link(),
-    }),
+        0 : Joi.string().required(),
+        1 : Joi.string().required(),
+        2 : Joi.string().required(),
+        3 : Joi.string(),
+        4 : Joi.string(),
+        5 : Joi.string(),
+        6 : Joi.string(),
+        7 : Joi.string(),
+        8 : Joi.string(),
+        9 : Joi.string(),
+    }).required(),
     datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
     biography: Joi.string().max(300).required(),
-    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese'),
+    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').required(),
     longitude: Joi.number().required(),
     latitude: Joi.number().required(),
-});//.with('uuid' /*, 'name','birthDate','gender','height','imagePath','datingGoal','bio','bodyType','latitude','longitude'*/);
+});
+
+const update_profile_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    gender: Joi.string().valid('man','woman','non-binary').optional(),
+    imagePath: Joi.object().keys({
+        0 : Joi.string().required(),
+        1 : Joi.string().required(),
+        2 : Joi.string().required(),
+        3 : Joi.string(),
+        4 : Joi.string(),
+        5 : Joi.string(),
+        6 : Joi.string(),
+        7 : Joi.string(),
+        8 : Joi.string(),
+        9 : Joi.string(),
+    }).optional(),
+    datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').optional(),
+    biography: Joi.string().max(300).optional(),
+    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').optional(),
+    longitude: Joi.number().optional(),
+    latitude: Joi.number().optional(),
+});
 
 //Template for comments, copy and use the below 
 
@@ -205,13 +225,21 @@ app.post('/profile', async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
 
     //Remember to update the state in the account table.
-    let input = Object.assign(req.body, {token : req.headers.authorization});
-
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
+    }
+    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
     try {
         const value = await create_profile_schema.validateAsync(input)
     } catch (err){
+        console.log("did not pass schema validation.")
         console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
     }
+
+    console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
     let result:number = -1;
@@ -236,7 +264,7 @@ app.post('/profile', async (req:Request, res:Response) => {
         birthDate: req.body.birthDate,
         gender: req.body.gender,
         height: req.body.height,
-        imagePath: req.body.photos,
+        imagePath: req.body.imagePath,
         datingGoal: req.body.datingGoal,
         biography: req.body.biography,
         bodyType: req.body.bodyType,
@@ -249,7 +277,30 @@ app.post('/profile', async (req:Request, res:Response) => {
 
 //to update an existing profile within the application.
 app.put('/profile', async (req:Request, res:Response) => {
+    let input = Object.assign(req.body, {token : req.headers.authorization});
+    try {
+        const value = await update_profile_schema.validateAsync(input)
+        console.log(value)
+    } catch (err){
+        console.log(err)
+    }
 
+    //verify that the two exist together in the auth table.
+    let result:number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+    //if invalid, return without completing. 
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
+    }
+
+    res.json({message: "Profile updated."});
 })
 
 //to allow a user application to receive information about their own profile.
