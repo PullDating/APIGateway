@@ -59,32 +59,6 @@ export default class Filter extends Model{
     @Column(DataType.BOOLEAN)
     genderNonBinary!: boolean
 
-    //dg stands for dating goal
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgLongTerm!: boolean
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgShortTerm!: boolean
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgHookup!: boolean
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgMarriage!: boolean
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgJustChatting!: boolean
-
-    @AllowNull(false)
-    @Column(DataType.BOOLEAN)
-    dgUnsure!: boolean
-
     //bt stands for bodytype
 
     @AllowNull(false)

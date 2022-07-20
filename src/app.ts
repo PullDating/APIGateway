@@ -107,12 +107,6 @@ const create_filter_schema = Joi.object({
     genderMan: Joi.boolean().required(),
     genderWoman: Joi.boolean().required(),
     genderNonBinary: Joi.boolean().optional(),
-    dgLongTerm: Joi.boolean().required(),
-    dgShortTerm: Joi.boolean().required(),
-    dgHookup: Joi.boolean().required(),
-    dgMarriage: Joi.boolean().required(),
-    dgJustChatting: Joi.boolean().required(),
-    dgUnsure: Joi.boolean().required(),
     btLean: Joi.boolean().required(),
     btAverage: Joi.boolean().required(),
     btMuscular: Joi.boolean().required(),
@@ -620,7 +614,7 @@ app.post('/swipe', async (req:Request, res:Response) => {
 //set the filters for a profile for the first time 
 app.post('/filter', async (req:Request, res:Response) => {
 
-    console.log(req.body);
+    //console.log(req.body);
 
     //authentication
     if(req.headers.authorization == null){
@@ -638,12 +632,6 @@ app.post('/filter', async (req:Request, res:Response) => {
         genderMan: req.body.gender.man,
         genderWoman: req.body.gender.woman,
         genderNonBinary: req.body.gender.nonBinary,
-        dgLongTerm: req.body.datingGoal.longTerm,
-        dgShortTerm: req.body.datingGoal.shortTerm,
-        dgHookup: req.body.datingGoal.hookup,
-        dgMarriage: req.body.datingGoal.marriage,
-        dgJustChatting: req.body.datingGoal.justChatting,
-        dgUnsure: req.body.datingGoal.unsure,
         btLean: req.body.bodyType.lean,
         btAverage: req.body.bodyType.average,
         btMuscular: req.body.bodyType.muscular,
@@ -683,7 +671,7 @@ app.post('/filter', async (req:Request, res:Response) => {
     }
 
     //check to see if one exists already, if so, ignore it.
-    const existingFilter = await Swipe.findOne({where: {uuid: req.body.uuid}});
+    const existingFilter = await Filter.findOne({where: {uuid: req.body.uuid}});
     if(!existingFilter){
         console.log("creating filter");
         Filter.create(inputNoToken);
@@ -693,16 +681,65 @@ app.post('/filter', async (req:Request, res:Response) => {
         res.json({message: "filter already existed, try put if you intend to modify."});
     }
 
-    //create the filter entry within the database 
-    
-    
-    
-
 });
 
 //update the filters for a user
 app.put('/filter', async (req:Request, res:Response) => {
+    //authentication
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
+    }
+    //let value:any;
+    let value:any;
 
+    //need to modify this to be ok it is not present maybe with ? or :? idk.
+    let inputNoToken = Object.assign({
+        uuid: req.body.uuid,
+        minBirthDate: req.body.birthDate.min,
+        maxBirthDate: req.body.birthDate.max,
+        minHeight: req.body.height.min,
+        maxHeight: req.body.height.max,
+        genderMan: req.body.gender.man,
+        genderWoman: req.body.gender.woman,
+        genderNonBinary: req.body.gender.nonBinary,
+        btLean: req.body.bodyType.lean,
+        btAverage: req.body.bodyType.average,
+        btMuscular: req.body.bodyType.muscular,
+        btHeavy: req.body.bodyType.heavy,
+        btObese: req.body.bodyType.obese,
+        maxDistance: req.body.maxDistance,
+    })
+
+    let input = Object.assign(inputNoToken, {
+        token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    });
+
+    try {
+        value = await create_filter_schema.validateAsync(input)
+    } catch (err){
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
+    }
+
+    console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result:number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+    //if invalid, return without completing. 
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
+    }
 })
 
 //return the top people that meet the user's filters.
