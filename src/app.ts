@@ -115,6 +115,24 @@ const create_filter_schema = Joi.object({
     maxDistance: Joi.number().required()
 });
 
+const update_filter_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    minBirthDate: Joi.date().optional(),
+    maxBirthDate: Joi.date().optional(),
+    minHeight: Joi.number().optional(),
+    maxHeight: Joi.number().optional(),
+    genderMan: Joi.boolean().optional(),
+    genderWoman: Joi.boolean().optional(),
+    genderNonBinary: Joi.boolean().optional(),
+    btLean: Joi.boolean().optional(),
+    btAverage: Joi.boolean().optional(),
+    btMuscular: Joi.boolean().optional(),
+    btHeavy: Joi.boolean().optional(),
+    btObese: Joi.boolean().optional(),
+    maxDistance: Joi.number().optional()
+});
+
 //TODO add with statement so that you can't have multiple of the multiple choice ones. 
 
 //Template for comments, copy and use the below 
@@ -694,29 +712,31 @@ app.put('/filter', async (req:Request, res:Response) => {
     let value:any;
 
     //need to modify this to be ok it is not present maybe with ? or :? idk.
-    let inputNoToken = Object.assign({
+    let inputNoToken = {
         uuid: req.body.uuid,
-        minBirthDate: req.body.birthDate.min,
-        maxBirthDate: req.body.birthDate.max,
-        minHeight: req.body.height.min,
-        maxHeight: req.body.height.max,
-        genderMan: req.body.gender.man,
-        genderWoman: req.body.gender.woman,
-        genderNonBinary: req.body.gender.nonBinary,
-        btLean: req.body.bodyType.lean,
-        btAverage: req.body.bodyType.average,
-        btMuscular: req.body.bodyType.muscular,
-        btHeavy: req.body.bodyType.heavy,
-        btObese: req.body.bodyType.obese,
-        maxDistance: req.body.maxDistance,
-    })
+        ...(req.body.birthDate.min && {minBirthDate : req.body.birthDate.min}),
+        ...(req.body.birthDate.max && {maxBirthDate : req.body.birthDate.max}),
+        ...(req.body.height.min && {minHeight : req.body.height.min}),
+        ...(req.body.height.max && {maxHeight : req.body.height.max}),
+        ...(req.body.gender.man && {genderMan : req.body.gender.man}),
+        ...(req.body.gender.woman && {genderWoman : req.body.gender.woman}),
+        ...(req.body.gender.nonBinary && {genderNonBinary : req.body.gender.nonBinary}),
+        ...(req.body.bodyType.lean && {btLean : req.body.bodyType.lean}),
+        ...(req.body.bodyType.average && {btAverage : req.body.bodyType.average}),
+        ...(req.body.bodyType.muscular && {btMuscular : req.body.bodyType.muscular}),
+        ...(req.body.bodyType.heavy && {btHeavy : req.body.bodyType.heavy}),
+        ...(req.body.bodyType.obese && {btObese : req.body.bodyType.obese}),
+        ...(req.body.maxDistance && {maxDistance : req.body.maxDistance})
+    }
+
+    console.log(inputNoToken)
 
     let input = Object.assign(inputNoToken, {
         token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
     });
 
     try {
-        value = await create_filter_schema.validateAsync(input)
+        value = await update_filter_schema.validateAsync(input)
     } catch (err){
         console.log("did not pass schema validation.")
         console.log(err)
@@ -740,17 +760,36 @@ app.put('/filter', async (req:Request, res:Response) => {
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
     }
+
+    //function specific logic
+    const existingFilter = await Filter.findOne({where: {uuid: req.body.uuid}});
+    if(existingFilter){
+        console.log("creating filter");
+        Filter.update(inputNoToken, {where: {uuid: req.body.uuid}});
+        res.json({message: "filter created"});
+    }
+    else{
+        res.json({message: "filter doesn't exist, call post if you intend to create one."});
+    }
+
 })
 
 //return the top people that meet the user's filters.
+/*
+inputs: 
+- 
+*/
 app.get('/people', async (req:Request, res:Response) => {
 
 });
 
+//block is currently handled under swipe
+/*
 //allow a user to block another user
 app.post('/block', async (req:Request,res:Response)=>{
 
 })
+*/
 
 //returns the number of blocks on a user.
 app.get('/block/number', async (req:Request,res:Response)=>{
