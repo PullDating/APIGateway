@@ -1,4 +1,4 @@
 node_modules
-src/config/.env
+.env
 src/config/.env.development
 config.ts
