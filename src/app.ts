@@ -22,7 +22,7 @@ import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
-import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
+import { collapseTextChangeRangesAcrossMultipleVersions, isConstructorDeclaration } from 'typescript';
 
 import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT} from "./config";
 
@@ -819,17 +819,26 @@ app.get('/storage/miniotest', async (req:Request, res:Response) => {
     var file = "C:/Users/wdormer/Pictures/Oscar.jpg";
 
     minioClient.makeBucket('oscartest', 'us-east-1', function(err:any) {
-        if(err) return console.log(err)
+        if(err) {
+            return console.log(err)
+        }
+        console.log("created bucket successfully");
 
         var metaData = {
-            'Whos a good dog?' : 'This guy'
+            'whos-a-good-dog' : 'this-guy'
         }
 
         minioClient.fPutObject('oscartest', 'oscar', file, metaData, function(err:any, etag:any) {
-            if (err) return console.log(err)
+            if (err) {
+                return console.log(err)
+            }
             console.log('File uploaded successfully.')
         })
+        return 0;
     })
+    
+    res.json({message: "File uploaded"})
+    
 });
 
 
