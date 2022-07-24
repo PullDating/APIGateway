@@ -4,7 +4,7 @@ import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
 import router from './router';
-import { SERVICE_PORT } from './config';
+import { SERVICE_PORT } from './config/vars';
 import { Request, Response, Router } from 'express';
 
 //sequelize models.
