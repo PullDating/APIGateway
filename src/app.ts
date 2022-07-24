@@ -23,7 +23,11 @@ import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
 import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
+
+import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT} from "./config";
+
 const Joi = require('joi');
+const Minio = require('minio'); //for object storage
 
 export const app = express();
 app.use(helmet());
@@ -803,7 +807,30 @@ app.get('/likes')
 //get all current matches
 app.get('/matches')
 
+app.get('/storage/miniotest', async (req:Request, res:Response) => {
+    var minioClient = new Minio.Client({
+        endPoint: MINIO_ENDPOINT,
+        port: MINIO_PORT,
+        useSSL: MINIO_USE_SSL, 
+        accessKey: MINIO_ACCESS_KEY,
+        secretKey: MINIO_SECRET_KEY
+    });
 
+    var file = "C:/Users/wdormer/Pictures/Oscar.jpg";
+
+    minioClient.makeBucket('oscartest', 'us-east-1', function(err:any) {
+        if(err) return console.log(err)
+
+        var metaData = {
+            'Whos a good dog?' : 'This guy'
+        }
+
+        minioClient.fPutObject('oscartest', 'oscar', file, metaData, function(err:any, etag:any) {
+            if (err) return console.log(err)
+            console.log('File uploaded successfully.')
+        })
+    })
+});
 
 
 // /test stuff is just for messing around. Delete before pushing to main/production
