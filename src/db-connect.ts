@@ -7,7 +7,7 @@ import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
 
-export async function dbInitialize() {
+export async function dbInitialize():Promise<Sequelize> {
     console.log("Attempting to initialize the database");
     console.log(`The current directory name is ${__dirname}`);    
     console.log(`envs: ${DB_NAME}, ${DB_PASSWORD}, ${DB_HOST}, ${DB_USER}`)
@@ -36,5 +36,6 @@ export async function dbInitialize() {
         console.error('Unable to connect to db:', error);
     }
 
+    return sequelize;
     
 }

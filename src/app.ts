@@ -1,5 +1,5 @@
 import express, { response } from 'express';
-import helmet from 'helmet';
+import helmet, { permittedCrossDomainPolicies } from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
@@ -17,7 +17,7 @@ import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
 
-import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
+import { DoubleDataType, FloatDataType, GeographyDataType, Sequelize, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 
@@ -25,7 +25,7 @@ import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
-import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
+import { collapseTextChangeRangesAcrossMultipleVersions, isConstructorDeclaration } from 'typescript';
 const Joi = require('joi');
 
 export const app = express();
@@ -35,6 +35,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/', router);
+
+let sequelize:Sequelize;
 
 //joi schemas
 
@@ -135,6 +137,12 @@ const update_filter_schema = Joi.object({
     btObese: Joi.boolean().optional(),
     maxDistance: Joi.number().optional()
 });
+
+const get_people_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    number: Joi.number().min(1).max(25).required()
+})
 
 //TODO add with statement so that you can't have multiple of the multiple choice ones. 
 
@@ -777,12 +785,103 @@ app.put('/filter', async (req:Request, res:Response) => {
 
 })
 
-//return the top people that meet the user's filters.
+//return the top people that meet the user's filters. This one is going to require
+//the most thinking of how we want to do it. For now I'm going to implement the most 
+//simplistic version, where it only takes into account the filters applied. 
 /*
 inputs: 
-- 
+- number: 
 */
 app.get('/people', async (req:Request, res:Response) => {
+   //limit the number in the schema
+
+   //authentication
+    if(req.headers.authorization == null){
+        res.json({error: "Authentication token was not supplied."});
+        return
+    }
+    //let value:any;
+    let value:any;
+    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    try {
+        value = await get_people_schema.validateAsync(input)
+    } catch (err){
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({error: "Inputs were invalid."});
+        return 
+    }
+
+    //console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result:number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err:any) {
+        console.error(err.stack);
+        res.status(500).json({message: "Server error"});
+        return;
+    }
+    //if invalid, return without completing. 
+    if(result != 0){
+        res.json({error: "Authentication was invalid, please re-authenticate."});
+        return
+    }
+
+    //function specific logic:
+    //find the first (<=number) of people that match the dating goal from the profile, and the filters in the filter table.
+    const profile = await Profile.findOne({where : {uuid: req.body.uuid}});
+    if(profile){
+        //console.log(profile);
+        //get the dating goal of the profile
+        let datingGoal:string = profile.datingGoal
+        //get the filters of that person
+        const filter = await Filter.findOne({where: {uuid: req.body.uuid}});
+        if(filter){
+            console.log("Both Filter and Profile exist, making call.")
+            //now we need to find people who's profile matches their dating goal, and who meet's their filters. 
+            //ideally, you also only want to see people who's filters you match as well. (that's a lot tougher challenge.)
+            
+            //we need a more complex query, so we're just going to use the SQL
+            //console.log(sequelize);
+
+
+            //find a list of people (limited in number) who's profile matches the filters of the sender, then left join that with the filter table, and return a limited number that are met by the original sender
+            console.log("\n\n\n");
+            //console.log(`sender: ${profile.uuid}`);
+            //console.log(`type: ${typeof(filter.maxBirthDate)}`)
+            //console.log(`max: ${filter.maxBirthDate}`);
+            //console.log(filter.maxBirthDate.toSQL())
+            console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
+            //const maxBD:DateTime = DateTime.fromFormat(filter.maxBirthDate,);
+            //const minBD:DateTime = DateTime.fromFormat(filter.minBirthDate,);
+
+            //get profiles that aren't the sender, and match the filters:
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';`
+            const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${filter.minBirthDate}' and 'birthDate' <= '${filter.maxBirthDate}';`
+
+
+            //join with account table to check if they are active recently? 
+
+            //const query:string = `SELECT * FROM (SELECT * FROM "Profiles" WHERE uuid != ${profile.uuid} and "birthDate" >= ${filter.minBirthDate} and birthDate" <= ${filter.maxBirthDate} LIMIT 100) as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid) WHERE ${profile.birthDate} >= "minBirthDate" and ${profile.birthDate} <= "maxBirthDate" LIMIT ${req.body.number}`;
+            const [results, metadata] = await sequelize.query(query1)
+
+            //const [results,metadata] = await sequelize.query(
+            //    "SELECT * FROM Filters JOIN Profiles ON Filters.uuid = Profiles.uuid"
+            //)
+            console.log(results)
+
+            res.json({message: "REPLACE THIS"})
+        }else{
+            res.json({message: "couldn't find the user's filters"})
+        }
+    }else{
+        res.json({message: "couldn't find the user profile."})
+    }
+
+
 
 });
 
@@ -794,6 +893,8 @@ app.post('/block', async (req:Request,res:Response)=>{
 })
 */
 
+
+//This should be moved, or the endpoint label should be changed to be under swipe.
 //returns the number of blocks on a user.
 app.get('/block/number', async (req:Request,res:Response)=>{
 
@@ -840,7 +941,8 @@ app.get('/test/2', async (req:Request,res:Response)=> {
 
 
 
-dbInitialize().then(() => {
+dbInitialize().then((sequelizeReturn) => {
+    sequelize = sequelizeReturn;
     app.listen(SERVICE_PORT);
     console.log(`listening on port ${SERVICE_PORT!.toString()}`);
 });
