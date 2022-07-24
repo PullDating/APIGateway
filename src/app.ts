@@ -4,8 +4,11 @@ import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
 import router from './router';
-import { SERVICE_PORT } from './config/vars';
+import * as dotenv from 'dotenv';
+//import { SERVICE_PORT } from 'env';
 import { Request, Response, Router } from 'express';
+
+const SERVICE_PORT = process.env['SERVICE_PORT'];
 
 //sequelize models.
 import Account from './models/account';
@@ -839,5 +842,5 @@ app.get('/test/2', async (req:Request,res:Response)=> {
 
 dbInitialize().then(() => {
     app.listen(SERVICE_PORT);
-    console.log(`listening on port ${SERVICE_PORT.toString()}`);
+    console.log(`listening on port ${SERVICE_PORT!.toString()}`);
 });

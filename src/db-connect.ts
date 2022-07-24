@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
-import { DB_NAME, DB_PASSWORD, DB_URL, DB_USER } from "./config/vars";
+import { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } from "./config/vars";
 import * as path from 'path';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
@@ -10,7 +10,7 @@ import Filter from './models/filter';
 export async function dbInitialize() {
     console.log("Attempting to initialize the database");
     console.log(`The current directory name is ${__dirname}`);    
-    console.log(`envs: ${DB_NAME}, ${DB_PASSWORD}, ${DB_URL}, ${DB_USER}`)
+    console.log(`envs: ${DB_NAME}, ${DB_PASSWORD}, ${DB_HOST}, ${DB_USER}`)
 
 
     /*
@@ -22,7 +22,7 @@ export async function dbInitialize() {
     */
 
     const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
-        host: DB_URL,
+        host: DB_HOST,
         dialect: 'postgres'
     });
 
