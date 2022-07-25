@@ -17,6 +17,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
+import {connect_minio, set_user_photos, get_user_photos} from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -26,8 +27,30 @@ import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
 
 import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT} from "./config";
 
+
 const Joi = require('joi');
 const Minio = require('minio'); //for object storage
+
+//multer configuration.
+import multer, { FileFilterCallback } from 'multer'
+type DestinationCallback = (error: Error | null, destination: string) => void
+type FileNameCallback = (error: Error | null, filename: string) => void
+
+var storage = multer.memoryStorage();
+var uploadmemory = multer({
+     storage: storage ,
+     fileFilter: function (req, file, cb){
+        if(
+            file.mimetype === 'image/jpeg' || file.mimetype === 'image/png'
+        ) {
+            cb(null, true);
+        } else {
+            const error = new Error("Only .jpeg and .png images are allowed");
+            cb(null,false);
+        }
+     }
+    });
+var uploaddisk = multer({dest: 'uploads/'})
 
 export const app = express();
 app.use(helmet());
@@ -831,6 +854,27 @@ app.get('/storage/miniotest', async (req:Request, res:Response) => {
         })
     })
 });
+
+//need to use multer (which parses form data, which is needed for uploading images) or something similar. 
+app.post('/storage/miniotest2', uploaddisk.single('avatar') , async (req:Request, res:Response) => {
+    var minioClient = await connect_minio();
+    let image1:any = req.file!;
+    await set_user_photos(req.body.uuid, image1, 'image', minioClient);
+});
+
+app.post('/storage/miniotest3', uploadmemory.array('photos',2) , async (req:Request, res:Response) => {
+    let files = req.files;
+    if(!files) return res.status(400).json({
+        "error" : "image input array is required"
+    })
+    console.log("Got past file null check.")
+
+    console.log(files);
+
+    //await set_user_photos(req.body.uuid, image1, 'image', minioClient);
+});
+
+
 
 
 // /test stuff is just for messing around. Delete before pushing to main/production
