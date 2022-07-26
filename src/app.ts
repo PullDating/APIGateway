@@ -7,12 +7,17 @@ import router from './router';
 import { SERVICE_PORT } from './config';
 import { Request, Response, Router } from 'express';
 
+
+
+const {passThrough} = require('stream');
+
 //sequelize models.
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
+import {uploadStream} from './components/object_store/minio_utils'
 
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
@@ -22,35 +27,16 @@ import {connect_minio, set_user_photos, get_user_photos} from './components/obje
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
-import { any } from 'joi';
+import { any, array } from 'joi';
 import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
 
 import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT} from "./config";
+import { Stream, Writable } from 'stream';
 
 
-const Joi = require('joi');
+const Joi = require('joi'); //for schema validation
 const Minio = require('minio'); //for object storage
 
-//multer configuration.
-import multer, { FileFilterCallback } from 'multer'
-type DestinationCallback = (error: Error | null, destination: string) => void
-type FileNameCallback = (error: Error | null, filename: string) => void
-
-var storage = multer.memoryStorage();
-var uploadmemory = multer({
-     storage: storage ,
-     fileFilter: function (req, file, cb){
-        if(
-            file.mimetype === 'image/jpeg' || file.mimetype === 'image/png'
-        ) {
-            cb(null, true);
-        } else {
-            const error = new Error("Only .jpeg and .png images are allowed");
-            cb(null,false);
-        }
-     }
-    });
-var uploaddisk = multer({dest: 'uploads/'})
 
 export const app = express();
 app.use(helmet());
@@ -855,23 +841,46 @@ app.get('/storage/miniotest', async (req:Request, res:Response) => {
     })
 });
 
-//need to use multer (which parses form data, which is needed for uploading images) or something similar. 
-app.post('/storage/miniotest2', uploaddisk.single('avatar') , async (req:Request, res:Response) => {
-    var minioClient = await connect_minio();
-    let image1:any = req.file!;
-    await set_user_photos(req.body.uuid, image1, 'image', minioClient);
-});
+/*
+options.fileWriteStreamHandler {function} - default null, which by default writes to host machine file system every file parsed; The function should return an instance of a Writable stream that will receive the uploaded file data. With this option, you can have any custom behavior regarding where the uploaded file data will be streamed for. If you are looking to write the file uploaded in other types of cloud storages (AWS S3, Azure blob storage, Google cloud storage) or private file storage, this is the option you're looking for. When this option is defined the default behavior of writing the file in the host machine file system is lost.
+*/
+const os = require('os');
+const path = require('path');
+const Busboy = require('busboy'); //for file uploads
 
-app.post('/storage/miniotest3', uploadmemory.array('photos',2) , async (req:Request, res:Response) => {
-    let files = req.files;
-    if(!files) return res.status(400).json({
-        "error" : "image input array is required"
-    })
-    console.log("Got past file null check.")
+const multer  = require('multer')
+const upload = multer({ dest: 'uploads/' })
+const fs = require('fs')
+const { promisify } = require('util')
 
-    console.log(files);
+const unlinkAsync = promisify(fs.unlink)
 
-    //await set_user_photos(req.body.uuid, image1, 'image', minioClient);
+app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
+    let minioClient = await connect_minio();
+    console.log(req.files);
+    //the files are getting uploaded to /uploads, but I cannot figure out how to interpret/receive them in the code.
+
+    var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+        return file.filename; // or file.originalname
+      });
+
+    console.log(filenames);
+
+    
+
+    //fileKeys.forEach(function(key) {
+    //    files.push(req.files![key]);
+    //});
+
+
+
+    // Delete the file like normal
+    //for (var i = 0; i < req.files!.length; i++) {
+    //    await unlinkAsync(req.files[i].path)
+    //}
+    
+
+    res.json({message: "god help us all."})
 });
 
 
