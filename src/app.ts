@@ -17,7 +17,6 @@ import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
-import {uploadStream} from './components/object_store/minio_utils'
 
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
@@ -860,11 +859,32 @@ app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, 
     console.log(req.files);
     //the files are getting uploaded to /uploads, but I cannot figure out how to interpret/receive them in the code.
 
-    var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
-        return file.filename; // or file.originalname
-      });
+    console.log(req.body.uuid)
 
-    console.log(filenames);
+    var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+        return file.filename;
+    });
+
+    console.log(filenames)
+
+    //get the file paths for the newly uploaded files.
+    var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+        return file.path;
+    });
+
+    console.log(filepaths)
+
+    
+
+    await set_user_photos(req.body.uuid, filepaths, minioClient)
+
+
+    //TODO remove the uploaded files from this server programatically.
+
+
+    ///console.log(filepaths);
+
+    //upload the filepaths using the mino helper stuff.
 
     
 
