@@ -21,7 +21,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import {connect_minio, set_user_photos_from_path,set_user_photos_from_multer, get_user_photos} from './components/object_store/minio_utils';
+import {connect_minio, set_user_photos_from_path,set_user_photos_from_multer, get_user_photos, delete_files} from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -69,18 +69,19 @@ const create_profile_schema = Joi.object({
     birthDate: Joi.date().required(),
     gender: Joi.string().valid('man','woman','non-binary').required(),
     height: Joi.number().min(0).max(304.8).required(),
-    imagePath: Joi.object().keys({
-        0 : Joi.string().required(),
-        1 : Joi.string().required(),
-        2 : Joi.string().required(),
-        3 : Joi.string(),
-        4 : Joi.string(),
-        5 : Joi.string(),
-        6 : Joi.string(),
-        7 : Joi.string(),
-        8 : Joi.string(),
-        9 : Joi.string(),
-    }).required(),
+    // imagePath: Joi.object().keys({
+    //     "bucket" : Joi.string().required(),
+    //     0 : Joi.string().required(),
+    //     1 : Joi.string().required(),
+    //     2 : Joi.string().required(),
+    //     3 : Joi.string(),
+    //     4 : Joi.string(),
+    //     5 : Joi.string(),
+    //     6 : Joi.string(),
+    //     7 : Joi.string(),
+    //     8 : Joi.string(),
+    //     9 : Joi.string(),
+    // }).required(),
     datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
     biography: Joi.string().max(300).required(),
     bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').required(),
@@ -92,18 +93,19 @@ const update_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     gender: Joi.string().valid('man','woman','non-binary').optional(),
-    imagePath: Joi.object().keys({
-        0 : Joi.string().required(),
-        1 : Joi.string().required(),
-        2 : Joi.string().required(),
-        3 : Joi.string(),
-        4 : Joi.string(),
-        5 : Joi.string(),
-        6 : Joi.string(),
-        7 : Joi.string(),
-        8 : Joi.string(),
-        9 : Joi.string(),
-    }).optional(),
+    // imagePath: Joi.object().keys({
+    //     "bucket" : Joi.string().required(),
+    //     0 : Joi.string().required(),
+    //     1 : Joi.string().required(),
+    //     2 : Joi.string().required(),
+    //     3 : Joi.string(),
+    //     4 : Joi.string(),
+    //     5 : Joi.string(),
+    //     6 : Joi.string(),
+    //     7 : Joi.string(),
+    //     8 : Joi.string(),
+    //     9 : Joi.string(),
+    // }).optional(),
     datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').optional(),
     biography: Joi.string().max(300).optional(),
     bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').optional(),
@@ -302,22 +304,41 @@ Inputs:
 Outputs:
 - 
 */
-app.post('/profile', async (req:Request, res:Response) => {
+app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos) , async (req:Request, res:Response) => {
     //TODO add the functionality in another file and call it here.
 
-    
+    //get the file paths for the newly uploaded files.
+    var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+        return file.path;
+    });
+
     if(req.headers.authorization == null){
+        await delete_files(filepaths);
         res.json({error: "Authentication token was not supplied."});
         return
     }
     let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
     try {
         const value = await create_profile_schema.validateAsync(input)
+
     } catch (err){
         console.log("did not pass schema validation.")
         console.log(err)
+        await delete_files(filepaths);
         res.json({error: "Inputs were invalid."});
         return 
+    }
+
+    
+
+    //verify that the person has entered at least the minimum number of photos
+    if(filepaths.length < minProfilePhotos || filepaths.length > maxProfilePhotos){
+        console.log("received an invalid number of photos")
+        //delete the files
+        await delete_files(filepaths);
+        //return error to the user
+        res.json({error: "Invaild number of photos"})
+        return
     }
 
     //console.log("Got past schema validation.")
@@ -328,47 +349,62 @@ app.post('/profile', async (req:Request, res:Response) => {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
     } catch (err:any) {
         console.error(err.stack);
+        await delete_files(filepaths);
         res.status(500).json({message: "Server error"});
         return;
     }
     //if invalid, return without completing. 
     if(result != 0){
+        await delete_files(filepaths);
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
     }
 
     //logic unique to this function.....
 
+    console.log("Attempting to send the photos from profile get.")
+    //upload the file to the minio container
+    let minioClient = connect_minio();
+    //it is not waiting for this to complete. It is just moving on... 
+    // which is resulting in the delete firing before this one.
+    const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
+    //delete the files
 
-    //create profile entry.
-    const profile = new Profile({
-        uuid: req.body.uuid,
-        name: req.body.name,
-        birthDate: req.body.birthDate,
-        gender: req.body.gender,
-        height: req.body.height,
-        imagePath: req.body.imagePath,
-        datingGoal: req.body.datingGoal,
-        biography: req.body.biography,
-        bodyType: req.body.bodyType,
-        lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
-    });
-    profile.save();
+    console.log("Attemping to delete the files.")
+    //await delete_files(filepaths);
+    if(imageDatabaseObject){
+        await delete_files(filepaths);
 
-    //update the state in the account table to 1.
-    const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-    if (account) {
-        account.state = 1;
-        await account.save();
-    } else {
-        console.log("User account not found, couldn't update state");
+        //create profile entry.
+        const profile = new Profile({
+            uuid: req.body.uuid,
+            name: req.body.name,
+            birthDate: req.body.birthDate,
+            gender: req.body.gender,
+            height: req.body.height,
+            imagePath: imageDatabaseObject,
+            datingGoal: req.body.datingGoal,
+            biography: req.body.biography,
+            bodyType: req.body.bodyType,
+            lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
+        });
+        profile.save();
+
+        //update the state in the account table to 1.
+        const account = await Account.findOne({ where: { uuid: req.body.uuid } });
+        if (account) {
+            account.state = 1;
+            await account.save();
+        } else {
+            console.log("User account not found, couldn't update state");
+        }
     }
 
     res.json({message: "Profile created."});
 });
 
 //to update an existing profile within the application.
-app.put('/profile', async (req:Request, res:Response) => {
+app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos) ,async (req:Request, res:Response) => {
 
     if(req.headers.authorization == null){
         res.json({error: "Authentication token was not supplied."});

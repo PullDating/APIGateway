@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const {PassThrough} = require('stream');
 
-export async function connect_minio(){
+export function connect_minio(){
     const minioClient = new Minio.Client({
         endPoint: MINIO_ENDPOINT,
         port: MINIO_PORT,
@@ -24,7 +24,9 @@ export async function connect_minio(){
 
 //set images for a user
 //not cleaining inputs here, that should be done in the app code, since this is only called by the app.
-export async function set_user_photos_from_path(uuid: string, imagePaths: string[],  minioClient: any){
+export async function set_user_photos_from_path(uuid: string, imagePaths: string[], minioClient: any, bucketName:string = defaultBucket): Promise<Object>{
+
+    let returnObject:Object = {"bucket": bucketName}
 
     //first remove all the images that are already in the bucket, if they exist:
     console.log("Got into set photo function.");
@@ -40,19 +42,22 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
 
         console.log(`Sending object ${i}`);
         const objName = uuid.concat("$", i.toString());
+        
         console.log(`object name: ${objName}`)
-        minioClient.fPutObject(defaultBucket, objName, imagePaths[i], metaData, function(err: any, objInfo: any) {
+        await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await function(err: any, objInfo: any) {
             console.log("Tried fPutObject...")
             if(err){
                 return console.log(err)
             }
+            returnObject = Object.assign(returnObject, {[i.toString()] : `${objName}`})
             console.log("Success", objInfo.etag,objInfo.versionId)
         });
     }
-
-    
+    return returnObject;
 }
 
+
+//remember to empty the file from uploads after whatever functionality you are doing, so that it doesn't build up in size.
 export async function set_user_photos_from_multer(uuid:string, multer_files:any[], minioClient:any){
     console.log("attempting to set the user photos from multer")
     //get the file paths for the newly uploaded files.
@@ -63,6 +68,7 @@ export async function set_user_photos_from_multer(uuid:string, multer_files:any[
 }
 
 //get images for a user
+//remember to empty the references to downloads afer you're done. 
 //the uuid is baked into the objectNames so we don't need to send it explicitly.
 export async function get_user_photos(minioClient:any, bucketName:string, objectNames:string[]){
 
@@ -81,6 +87,31 @@ export async function get_user_photos(minioClient:any, bucketName:string, object
 
     }
 
+}
+
+export async function delete_files(filepaths:string[]){
+    for(let i = 0; i < filepaths.length; i++){
+        await fs.unlink(`./${filepaths[i]}`, await function(err:any) {
+            if (err) throw err;
+            console.log("File deleted")
+        } )
+    }
+    console.log("all files deleted successfully");
+}
+
+export async function delete_file_from_uploads(filename:string){
+
+    fs.unlink(`./downloads/${filename}`, function(err:any) {
+        if (err) throw err;
+        console.log("File deleted")
+    } )
+}
+
+export async function delete_file_from_downloads(filename:string){
+    fs.unlink(`./uploads/${filename}`, function(err:any) {
+        if (err) throw err;
+        console.log("File deleted")
+    } )
 }
 
 //scan images for a user to make sure there is nothing funky about them
