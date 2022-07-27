@@ -1,0 +1,1 @@
+This file folder is used to hold the temporary returned values from the object store.

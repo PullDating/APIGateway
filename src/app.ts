@@ -21,7 +21,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import {connect_minio, set_user_photos, get_user_photos} from './components/object_store/minio_utils';
+import {connect_minio, set_user_photos_from_path,set_user_photos_from_multer, get_user_photos} from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -35,6 +35,21 @@ import { Stream, Writable } from 'stream';
 
 const Joi = require('joi'); //for schema validation
 const Minio = require('minio'); //for object storage
+
+const os = require('os');
+const path = require('path');
+const Busboy = require('busboy'); //for file uploads
+
+const multer  = require('multer')
+const upload = multer({ dest: 'uploads/' })
+const fs = require('fs')
+const { promisify } = require('util')
+
+const unlinkAsync = promisify(fs.unlink)
+
+const multer_profile_photos_upload = multer({ dest: 'uploads/' })
+const maxProfilePhotos = 6;
+const minProfilePhotos = 3;
 
 
 export const app = express();
@@ -815,45 +830,6 @@ app.get('/likes')
 //get all current matches
 app.get('/matches')
 
-app.get('/storage/miniotest', async (req:Request, res:Response) => {
-    var minioClient = new Minio.Client({
-        endPoint: MINIO_ENDPOINT,
-        port: MINIO_PORT,
-        useSSL: MINIO_USE_SSL, 
-        accessKey: MINIO_ACCESS_KEY,
-        secretKey: MINIO_SECRET_KEY
-    });
-
-    var file = "C:/Users/wdormer/Pictures/Oscar.jpg";
-
-    minioClient.makeBucket('oscartest', 'us-east-1', function(err:any) {
-        if(err) return console.log(err)
-
-        var metaData = {
-            'Whos a good dog?' : 'This guy'
-        }
-
-        minioClient.fPutObject('oscartest', 'oscar', file, metaData, function(err:any, etag:any) {
-            if (err) return console.log(err)
-            console.log('File uploaded successfully.')
-        })
-    })
-});
-
-/*
-options.fileWriteStreamHandler {function} - default null, which by default writes to host machine file system every file parsed; The function should return an instance of a Writable stream that will receive the uploaded file data. With this option, you can have any custom behavior regarding where the uploaded file data will be streamed for. If you are looking to write the file uploaded in other types of cloud storages (AWS S3, Azure blob storage, Google cloud storage) or private file storage, this is the option you're looking for. When this option is defined the default behavior of writing the file in the host machine file system is lost.
-*/
-const os = require('os');
-const path = require('path');
-const Busboy = require('busboy'); //for file uploads
-
-const multer  = require('multer')
-const upload = multer({ dest: 'uploads/' })
-const fs = require('fs')
-const { promisify } = require('util')
-
-const unlinkAsync = promisify(fs.unlink)
-
 app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
     let minioClient = await connect_minio();
     console.log(req.files);
@@ -874,33 +850,16 @@ app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, 
 
     console.log(filepaths)
 
-    
-
-    await set_user_photos(req.body.uuid, filepaths, minioClient)
-
-
-    //TODO remove the uploaded files from this server programatically.
-
-
-    ///console.log(filepaths);
-
-    //upload the filepaths using the mino helper stuff.
-
-    
-
-    //fileKeys.forEach(function(key) {
-    //    files.push(req.files![key]);
-    //});
-
-
-
-    // Delete the file like normal
-    //for (var i = 0; i < req.files!.length; i++) {
-    //    await unlinkAsync(req.files[i].path)
-    //}
+    await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
     
 
     res.json({message: "god help us all."})
+});
+
+app.get('/storage/miniotest4', async (req:Request, res:Response) => {
+    let objects:string[] = ['123$0','123$1'];
+    let minioClient = await connect_minio();
+    await get_user_photos(minioClient, 'nanortheast', objects)
 });
 
 

@@ -1,0 +1,1 @@
+This file folder is used to hold the temporary uploaded files before they are sent to the object store.
