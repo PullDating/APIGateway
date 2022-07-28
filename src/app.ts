@@ -21,7 +21,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import {connect_minio, set_user_photos_from_path,set_user_photos_from_multer, get_user_photos, delete_files} from './components/object_store/minio_utils';
+import {connect_minio, set_user_photos_from_path, get_user_photos, delete_files} from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -344,9 +344,9 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
     //console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let verifyresult:number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        verifyresult = await validate_auth(req.body.uuid, req.headers.authorization!);
     } catch (err:any) {
         console.error(err.stack);
         await delete_files(filepaths);
@@ -354,7 +354,7 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return;
     }
     //if invalid, return without completing. 
-    if(result != 0){
+    if(verifyresult != 0){
         await delete_files(filepaths);
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
@@ -365,15 +365,43 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
     console.log("Attempting to send the photos from profile get.")
     //upload the file to the minio container
     let minioClient = connect_minio();
-    //it is not waiting for this to complete. It is just moving on... 
-    // which is resulting in the delete firing before this one.
-    const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
+    console.log(minioClient)
+    async function callback(req:Request, imageDatabastObject:Object){
+        console.log("Got into callback")
+        const profile = new Profile({
+            uuid: req.body.uuid,
+            name: req.body.name,
+            birthDate: req.body.birthDate,
+            gender: req.body.gender,
+            height: req.body.height,
+            imagePath: imageDatabaseObject,
+            datingGoal: req.body.datingGoal,
+            biography: req.body.biography,
+            bodyType: req.body.bodyType,
+            lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
+        });
+        await profile.save();
+        const account = await Account.findOne({ where: { uuid: req.body.uuid } });
+        if (account) {
+            account.state = 1;
+            await account.save();
+        } else {
+            console.log("User account not found, couldn't update state");
+        }
+    }
+
+    //this actually executues both the upload and the file deletion in sequence. 
+    const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
     //delete the files
 
-    console.log("Attemping to delete the files.")
+    //console.log(imageDatabaseObject);
+
+    //console.log("Attemping to delete the files.")
     //await delete_files(filepaths);
-    if(imageDatabaseObject){
-        await delete_files(filepaths);
+    //if(imageDatabaseObject){
+        //await delete_files(filepaths);
+
+        /*
 
         //create profile entry.
         const profile = new Profile({
@@ -391,6 +419,7 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         profile.save();
 
         //update the state in the account table to 1.
+        
         const account = await Account.findOne({ where: { uuid: req.body.uuid } });
         if (account) {
             account.state = 1;
@@ -398,7 +427,9 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         } else {
             console.log("User account not found, couldn't update state");
         }
-    }
+
+        */
+    //}
 
     res.json({message: "Profile created."});
 });
@@ -886,7 +917,7 @@ app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, 
 
     console.log(filepaths)
 
-    await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
+    //await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
     
 
     res.json({message: "god help us all."})

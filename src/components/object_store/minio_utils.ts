@@ -24,7 +24,7 @@ export function connect_minio(){
 
 //set images for a user
 //not cleaining inputs here, that should be done in the app code, since this is only called by the app.
-export async function set_user_photos_from_path(uuid: string, imagePaths: string[], minioClient: any, bucketName:string = defaultBucket): Promise<Object>{
+export async function set_user_photos_from_path(uuid: string, imagePaths: string[], minioClient: any,callback:any, req:any, bucketName:string = defaultBucket): Promise<Object>{
 
     let returnObject:Object = {"bucket": bucketName}
 
@@ -51,21 +51,26 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
             }
             returnObject = Object.assign(returnObject, {[i.toString()] : `${objName}`})
             console.log("Success", objInfo.etag,objInfo.versionId)
+            delete_file(imagePaths[i])
+            if(i==imagePaths.length - 1){
+                callback(req, returnObject);
+            }
         });
     }
     return returnObject;
 }
 
-
+/*
 //remember to empty the file from uploads after whatever functionality you are doing, so that it doesn't build up in size.
-export async function set_user_photos_from_multer(uuid:string, multer_files:any[], minioClient:any){
+export async function set_user_photos_from_multer(uuid:string, multer_files:any[], minioClient:any,_callback:any){
     console.log("attempting to set the user photos from multer")
     //get the file paths for the newly uploaded files.
     var filepaths = (multer_files as Array<Express.Multer.File>).map(function(file: any) {
         return file.path;
     });
-    set_user_photos_from_path(uuid, filepaths, minioClient);
+    //;
 }
+*/
 
 //get images for a user
 //remember to empty the references to downloads afer you're done. 
@@ -99,16 +104,8 @@ export async function delete_files(filepaths:string[]){
     console.log("all files deleted successfully");
 }
 
-export async function delete_file_from_uploads(filename:string){
-
-    fs.unlink(`./downloads/${filename}`, function(err:any) {
-        if (err) throw err;
-        console.log("File deleted")
-    } )
-}
-
-export async function delete_file_from_downloads(filename:string){
-    fs.unlink(`./uploads/${filename}`, function(err:any) {
+export async function delete_file(filepath:string){
+    fs.unlink(`./${filepath}`, function(err:any) {
         if (err) throw err;
         console.log("File deleted")
     } )
@@ -117,4 +114,3 @@ export async function delete_file_from_downloads(filename:string){
 //scan images for a user to make sure there is nothing funky about them
 
 //compression stuff
-
