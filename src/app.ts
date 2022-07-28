@@ -360,38 +360,52 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return
     }
 
+    //first check to make sure that a profile doesn't already exist. 
+    await Profile.count({ where: { uuid: req.body.uuid } })
+      .then(async count => {
+        if (count != 0) {
+            console.log()
+            res.json({error: "Cannot post a profile if one already exists, try calling put instead"})
+            return;
+        } else {
+            console.log("Attempting to send the photos from profile get.")
+            //get the minio client
+            let minioClient = connect_minio();
+    
+            //callback that makes the create Profile query after uploading the photos
+            async function callback(req:Request, imageDatabastObject:Object){
+                console.log("Got into callback")
+                const profile = new Profile({
+                    uuid: req.body.uuid,
+                    name: req.body.name,
+                    birthDate: req.body.birthDate,
+                    gender: req.body.gender,
+                    height: req.body.height,
+                    imagePath: imageDatabaseObject,
+                    datingGoal: req.body.datingGoal,
+                    biography: req.body.biography,
+                    bodyType: req.body.bodyType,
+                    lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
+                });
+                await profile.save();
+                const account = await Account.findOne({ where: { uuid: req.body.uuid } });
+                if (account) {
+                    account.state = 1;
+                    await account.save();
+                } else {
+                    console.log("User account not found, couldn't update state");
+                }
+                res.json({message : "profile created"})
+            }
+
+        //this actually executues both the upload and the file deletion in sequence. 
+        const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
+        
+        }
+    });
+
     //logic unique to this function.....
 
-    console.log("Attempting to send the photos from profile get.")
-    //upload the file to the minio container
-    let minioClient = connect_minio();
-    console.log(minioClient)
-    async function callback(req:Request, imageDatabastObject:Object){
-        console.log("Got into callback")
-        const profile = new Profile({
-            uuid: req.body.uuid,
-            name: req.body.name,
-            birthDate: req.body.birthDate,
-            gender: req.body.gender,
-            height: req.body.height,
-            imagePath: imageDatabaseObject,
-            datingGoal: req.body.datingGoal,
-            biography: req.body.biography,
-            bodyType: req.body.bodyType,
-            lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
-        });
-        await profile.save();
-        const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-        if (account) {
-            account.state = 1;
-            await account.save();
-        } else {
-            console.log("User account not found, couldn't update state");
-        }
-    }
-
-    //this actually executues both the upload and the file deletion in sequence. 
-    const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
     //delete the files
 
     //console.log(imageDatabaseObject);
@@ -431,7 +445,7 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         */
     //}
 
-    res.json({message: "Profile created."});
+    //res.json({message: "Profile created."});
 });
 
 //to update an existing profile within the application.

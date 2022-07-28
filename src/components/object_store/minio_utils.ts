@@ -44,17 +44,21 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
         const objName = uuid.concat("$", i.toString());
         
         console.log(`object name: ${objName}`)
-        await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await function(err: any, objInfo: any) {
+        await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
             console.log("Tried fPutObject...")
             if(err){
                 return console.log(err)
             }
             returnObject = Object.assign(returnObject, {[i.toString()] : `${objName}`})
             console.log("Success", objInfo.etag,objInfo.versionId)
-            delete_file(imagePaths[i])
-            if(i==imagePaths.length - 1){
-                callback(req, returnObject);
-            }
+            await delete_file(imagePaths[i]).then(() =>{
+                if(i==imagePaths.length-1){
+                    console.log("Trying to call the callback!")
+                    console.log(returnObject)
+                    callback(req, returnObject);
+                }
+            })
+            
         });
     }
     return returnObject;
@@ -105,7 +109,7 @@ export async function delete_files(filepaths:string[]){
 }
 
 export async function delete_file(filepath:string){
-    fs.unlink(`./${filepath}`, function(err:any) {
+    await fs.unlink(`./${filepath}`, function(err:any) {
         if (err) throw err;
         console.log("File deleted")
     } )
