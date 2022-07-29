@@ -36,20 +36,19 @@ import { Stream, Writable } from 'stream';
 const Joi = require('joi'); //for schema validation
 const Minio = require('minio'); //for object storage
 
-const os = require('os');
-const path = require('path');
-const Busboy = require('busboy'); //for file uploads
+//const os = require('os');
+//const path = require('path');
+//const Busboy = require('busboy'); //for file uploads
 
-const multer  = require('multer')
-const upload = multer({ dest: 'uploads/' })
-const fs = require('fs')
-const { promisify } = require('util')
+const multer  = require('multer') //package used for parsing multi-part form data.
+const upload = multer() //used for the text only form-data endpoints.
+const multer_profile_photos_upload = multer({ dest: 'uploads/' })//used for photo upload form-data endpoints
 
-const unlinkAsync = promisify(fs.unlink)
+const fs = require('fs') //file system library.
+//const { promisify } = require('util') //utility library. 
 
-const multer_profile_photos_upload = multer({ dest: 'uploads/' })
-const maxProfilePhotos = 6;
-const minProfilePhotos = 3;
+const maxProfilePhotos = 6; //the max number of photos that someone is allowed to have in their profile.
+const minProfilePhotos = 3; //the minimum number of photos that someone is allowed to have in their profile.
 
 
 export const app = express();
@@ -183,6 +182,11 @@ app.get('/', (request: Request, responsed: Response) => {
     response.redirect('https://pulldating.tips');
 });
 
+app.get('/test', (req:Request, res:Response) => {
+    console.log(req.body);
+    res.json({message: "This is just a test function"})
+})
+
 /*
 - This function is called when there is no present uuid and/or token cached on the user
 device. It is used in two situations. The first is when they are first creating a profile
@@ -312,24 +316,29 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return file.path;
     });
 
+    //check to ensure they supplied the required authentication field.
     if(req.headers.authorization == null){
+        //clean up the dead files. 
         await delete_files(filepaths);
         res.json({error: "Authentication token was not supplied."});
         return
     }
+
+    //create input object that pushes together the req body and auth headers.
     let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
     try {
+        //validate it with the relevant schema 
         const value = await create_profile_schema.validateAsync(input)
 
-    } catch (err){
+    } catch (err){ //if there was a problem with validation
+        
         console.log("did not pass schema validation.")
         console.log(err)
+        //clean up the dead files
         await delete_files(filepaths);
         res.json({error: "Inputs were invalid."});
         return 
     }
-
-    
 
     //verify that the person has entered at least the minimum number of photos
     if(filepaths.length < minProfilePhotos || filepaths.length > maxProfilePhotos){
@@ -341,40 +350,48 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return
     }
 
-    //console.log("Got past schema validation.")
+    //at the point, the schema is valid, just need to check that the values are logical.
 
-    //verify that the two exist together in the auth table.
+    //verify that the uuid/auth token pair exists in the auth table.
     let verifyresult:number = -1;
     try {
+        //check to see if the auth is valid. 
         verifyresult = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err:any) { //if there was an error in the validation.
         console.error(err.stack);
+        //clean up the dead files.
         await delete_files(filepaths);
         res.status(500).json({message: "Server error"});
         return;
     }
-    //if invalid, return without completing. 
+
+    //if the result of the validation was invalid (aka they didn't match)
     if(verifyresult != 0){
+        //clean up the dead files
         await delete_files(filepaths);
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
     }
 
-    //first check to make sure that a profile doesn't already exist. 
+    //check to ensure that a person doesn't exist with the provided profile.
     await Profile.count({ where: { uuid: req.body.uuid } })
       .then(async count => {
-        if (count != 0) {
+        if (count != 0) { //if someone already exists.
             console.log()
+            //clean up dead files
+            await delete_files(filepaths)
             res.json({error: "Cannot post a profile if one already exists, try calling put instead"})
             return;
-        } else {
+        } else { //if no one exists (expected route)
             console.log("Attempting to send the photos from profile get.")
             //get the minio client
             let minioClient = connect_minio();
     
             //callback that makes the create Profile query after uploading the photos
             async function callback(req:Request, imageDatabastObject:Object){
-                console.log("Got into callback")
+                //console.log("Got into callback")
+
+                //create profile within the database.
                 const profile = new Profile({
                     uuid: req.body.uuid,
                     name: req.body.name,
@@ -388,64 +405,25 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
                     lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
                 });
                 await profile.save();
+
+                //update the account table to reflect the fact that they now have a profile.
                 const account = await Account.findOne({ where: { uuid: req.body.uuid } });
                 if (account) {
                     account.state = 1;
                     await account.save();
-                } else {
+                } else { //the ordering of this is bad, but this shouldn't occur.
                     console.log("User account not found, couldn't update state");
+                    //TODO Do something to correct for this issue if it occurs. 
                 }
+                //success message
                 res.json({message : "profile created"})
             }
 
         //this actually executues both the upload and the file deletion in sequence. 
         const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
-        
+
         }
     });
-
-    //logic unique to this function.....
-
-    //delete the files
-
-    //console.log(imageDatabaseObject);
-
-    //console.log("Attemping to delete the files.")
-    //await delete_files(filepaths);
-    //if(imageDatabaseObject){
-        //await delete_files(filepaths);
-
-        /*
-
-        //create profile entry.
-        const profile = new Profile({
-            uuid: req.body.uuid,
-            name: req.body.name,
-            birthDate: req.body.birthDate,
-            gender: req.body.gender,
-            height: req.body.height,
-            imagePath: imageDatabaseObject,
-            datingGoal: req.body.datingGoal,
-            biography: req.body.biography,
-            bodyType: req.body.bodyType,
-            lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
-        });
-        profile.save();
-
-        //update the state in the account table to 1.
-        
-        const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-        if (account) {
-            account.state = 1;
-            await account.save();
-        } else {
-            console.log("User account not found, couldn't update state");
-        }
-
-        */
-    //}
-
-    //res.json({message: "Profile created."});
 });
 
 //to update an existing profile within the application.
@@ -495,9 +473,6 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
         if(value['height']){
             profile.height = value['height']
         }
-        if(value['imagePath']){
-            profile.imagePath = value['imagePath']
-        }
         if(value['datingGoal']){
             profile.datingGoal = value['datingGoal']
         }
@@ -527,8 +502,10 @@ inputs:
 outputs:
 - profile object. 
 */
+app.get('/profile', upload.none(), async (req:Request, res:Response) => {
 
-app.get('/profile', async (req:Request, res:Response) => {
+    console.log("called get profile")
+    console.log(req.body);
 
     if(req.headers.authorization == null){
         res.json({error: "Authentication token was not supplied."});
@@ -557,24 +534,64 @@ app.get('/profile', async (req:Request, res:Response) => {
         res.status(500).json({message: "Server error"});
         return;
     }
+
     //if invalid, return without completing. 
     if(result != 0){
         res.json({error: "Authentication was invalid, please re-authenticate."});
         return
     }
 
-    let profile:any;
+    async function callback(profile:Profile|null){ //this is what will be called once the profile is found.
+        console.log("%cgot into callback", "color: orange")
+        if(profile != null){
+            console.log("profile was not null")
+            //look at the provided bucket and image names, and retrieve presigned get links. 
+
+            //connect to minio service
+            let minioClient = connect_minio();
+
+            const bucket:string = profile.imagePath['bucket'];
+            console.log(profile.imagePath)
+            console.log(`got bucket name: ${bucket}`)
+            let count = Object.keys(profile.imagePath).length; //number of items in the json (images + bucket)
+            count = count - 1
+            console.log(`got count: ${count}`)
+            //subtract one for the bucket key, which is not an image identifier. 
+            
+            //I need a different strategy, passing callbacks a specific number of times
+            let countfinished:number = 0;
+            //what is passed as the callback to the top level minio client and then down through the rest. 
+            async function callback(err:Error, presignedURL:string){
+                if(err) return console.log(err)
+                profile!.imagePath[countfinished] = presignedURL
+                countfinished++
+                if(countfinished < count){
+                    //call make another minio request.
+                    const object = profile!.imagePath[countfinished]
+                    await minioClient.presignedGetObject(bucket, object, (err:Error, presignedURL:string) => callback(err, presignedURL))
+                } else {
+                    //send the response
+                    res.json({profile})
+                    return
+                }
+            }
+            
+            const object = profile!.imagePath[countfinished]
+            await minioClient.presignedGetObject(bucket, object, (err:Error, presignedURL:string) => callback(err, presignedURL))
+
+        } else {
+            res.json({error: "User profile could not be found."});
+            return
+        }
+    }
+
     if(req.body.target){ //return the profile of the target
-        profile = await Profile.findOne({ where: { uuid: req.body.target } });
+        await Profile.findOne({ where: { uuid: req.body.target } }).then((profile) => callback(profile));
     }else{ //return the profile of the person that made the call
-        profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+        await Profile.findOne({ where: { uuid: req.body.uuid } }).then((profile) => callback(profile));
     }
-    if(profile){
-        //console.log(profile);
-        res.json({profile});
-    } else {
-        res.json({error: "User profile could not be found."});
-    }
+
+    
 })
 
 //allow a user to "like" another person
@@ -911,31 +928,31 @@ app.get('/likes')
 //get all current matches
 app.get('/matches')
 
-app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
-    let minioClient = await connect_minio();
-    console.log(req.files);
-    //the files are getting uploaded to /uploads, but I cannot figure out how to interpret/receive them in the code.
+// app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
+//     let minioClient = await connect_minio();
+//     console.log(req.files);
+//     //the files are getting uploaded to /uploads, but I cannot figure out how to interpret/receive them in the code.
 
-    console.log(req.body.uuid)
+//     console.log(req.body.uuid)
 
-    var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
-        return file.filename;
-    });
+//     var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+//         return file.filename;
+//     });
 
-    console.log(filenames)
+//     console.log(filenames)
 
-    //get the file paths for the newly uploaded files.
-    var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
-        return file.path;
-    });
+//     //get the file paths for the newly uploaded files.
+//     var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+//         return file.path;
+//     });
 
-    console.log(filepaths)
+//     console.log(filepaths)
 
-    //await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
+//     //await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
     
 
-    res.json({message: "god help us all."})
-});
+//     res.json({message: "god help us all."})
+// });
 
 app.get('/storage/miniotest4', async (req:Request, res:Response) => {
     let objects:string[] = ['123$0','123$1'];
@@ -963,6 +980,7 @@ app.get('/test/1', async (req:Request,res:Response) => {
     
     //res.json({result: "end of test"});
 });
+
 
 app.get('/test/2', async (req:Request,res:Response)=> {
     /*
