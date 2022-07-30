@@ -21,7 +21,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import upload_photo, { connect_minio, set_user_photos_from_path, get_user_photos, delete_files, get_num_images_from_imagePath } from './components/object_store/minio_utils';
+import upload_photo, {connect_minio, set_user_photos_from_path, get_user_photos, delete_files, get_num_images_from_imagePath, delete_file_in_minio } from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -509,12 +509,13 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
 //to update an existing profile within the application.
 app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
 
+    console.log("\n\n\n\n\n")
     //get the file paths for the newly uploaded files.
     var filepaths = (req.files as Array<Express.Multer.File>).map(function (file: any) {
         return file.path;
     });
 
-    console.log(req.body.reorder_photos)
+    //console.log(req.body.reorder_photos)
 
     if(req.body.reorder_photos){
         //convert it from string to json object.
@@ -565,14 +566,32 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
     //start of endpoint specific logic.
 
-    console.log("printing value");
-    console.log(value!);
+    //console.log("printing value");
+   // console.log(value!);
 
     const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+
+    //console.log("profile:\n" + profile);
     if (profile) {
 
+        //gets a new Image path object that reflects the movement of the existing ones.
+        function rearrange(reorder_photos:any, prevImagePath:any):object{
+            let newImagePath:any = {bucket: prevImagePath['bucket']}
+            //loop through and reassign the object names to the right spots.
+            for (var key of Object.keys(reorder_photos)) {
+                if(reorder_photos[key] == -1) { //skip the new ones for this function.
+                    continue
+                }
+                newImagePath[key] = prevImagePath[reorder_photos[key]]
+            }
+            //returns new image path
+            return newImagePath
+        }
+
+        //database call to update fields.
         async function standard_field_update_callback(imagePath?:Object){
             if(imagePath){
+                console.log("Final image path: " + JSON.stringify(imagePath));
                 profile!.imagePath = imagePath
             }
             if (value['gender']) {
@@ -601,13 +620,102 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                 return
             });
         }
-        const prevImagePath = req.body.imagePath;
+
+        const prevImagePath = profile.imagePath;
+        //console.log(prevImagePath)
         const count:number = get_num_images_from_imagePath(prevImagePath);
+
+        console.log("count: " + count);
+        console.log("filepaths: " + filepaths);
+
+
         if(filepaths.length > 0){ //they are trying to add images and reorder the existing ones.
             
-            if(req.body.reorder_photos){ // they want to upload photos and reorder them.
+            if(req.body.reorder_photos){ // they want to upload photos and reorder them, and perhaps delete old ones.
 
+                //enure that the first minProfilePhotos number slots are filled.
+                for(let i = 0 ; i < minProfilePhotos; i++){
+                    if(!req.body.reorder_photos[i]){
+                        delete_files(filepaths)
+                        res.json({error: "The first " + minProfilePhotos + " photos cannot be empty."})
+                    }
+                }
+
+                //figure out how many they are deleting and ensure they have the correct number of photos afterwards
+                //we need to figure out which values prevImagePath did not show up in reorder_photos as a value and get rid of them
+                let seen:boolean[] = new Array(count).fill(false); //which of the prevImagePath locations were used
+                let seen_count:number = 0;
+                let negative_count:number = 0;
+                for(var key of Object.keys(req.body.reorder_photos)){
+                    if(req.body.reorder_photos[key] == -1){ //skip if it is new photo.
+                        negative_count++
+                        continue
+                    }
+                    seen_count++
+                    seen[req.body.reorder_photos[key]] = true;
+                }
+
+                if(negative_count != filepaths.length){
+                    await delete_files(filepaths)
+                    res.json({error: "you tried supplying more new files than you indicated in reorder_photos"})
+                    return;
+                }
+
+                let deleted_count:number = count - seen_count;
+                //make sure we don't have too many photos
+                if(count + filepaths.length - deleted_count > maxProfilePhotos){
+                    res.json({error: "Too many photos were supplied, either delete more or upload less."})
+                    delete_files(filepaths)
+                    return;
+                }
+
+                let minioClient:any = connect_minio()
+                //now find the ones that weren't used and delete them
+                for(let i = 0; i < seen.length; i++ ){
+                    if(seen[i] == false){
+                        await delete_file_in_minio(minioClient, prevImagePath['bucket'], prevImagePath[i])
+                    }
+                }
+
+                //rearrange the ones that have been there the whole time
+                const newImagePath:any = rearrange(req.body.reorder_photos,prevImagePath)
+                //upload the new ones to their respective spots
+                
+                //make a callback that searches for the next one/ calls the database upload
+
+                //find the first 
+                let orderIndex:number;
+                let filepathsIndex:number = 0;
+                for(let i = 0 ; i < req.body.reorder_photos.length ; i++){
+                    if(req.body.reorder_photos[i] == -1){
+                        orderIndex = i;
+                        break;
+                    }
+                }
+
+                async function upload_photo_callback(objName:string){
+                    //update the newImagePath
+                    newImagePath[orderIndex] = objName
+                    filepathsIndex++
+                    if(filepathsIndex < filepaths.length){
+                        //search for the next one.
+                        for(let i = orderIndex ; i < req.body.reorder_photos.length ; i++){
+                            if(req.body.reorder_photos[i] == -1){
+                                orderIndex = i;
+                                break;
+                            }
+                        }
+                        upload_photo(minioClient, newImagePath.bucket, filepaths[filepathsIndex], upload_photo_callback)
+                    } else {
+                        //done with uploads
+                        await standard_field_update_callback(newImagePath)
+                    }
+                }
+
+                upload_photo(minioClient, newImagePath.bucket, filepaths[filepathsIndex], upload_photo_callback)
+                
             }else{ // they want to just upload photos, but not reorder the existing ones. 
+                console.log("no reorder, add, no delete")
                 if(count + filepaths.length > maxProfilePhotos){
                     delete_files(filepaths)
                     res.json({error: "You tried to upload too many photos..."})
@@ -617,13 +725,16 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                 let minioClient = connect_minio();
                 let newImagePath = prevImagePath
                 for(let i = 0 ; i<(filepaths.length); i++){
-    
+                    console.log("looping through filepaths: " + i)
                     async function upload_photo_callback(objName:string){
+                        console.log("got into upload_photo_callback")
                         //update the newImagePath
                         newImagePath[(i+count).toString()] = objName
+                        console.log("updated image path: \n" + JSON.stringify(newImagePath));
                         //if it's the last one, send the database query to update ImagePath
                         if(i == filepaths.length - 1){
-                            standard_field_update_callback(newImagePath)
+                            console.log("Done with uploding, time to submit to database")
+                            await standard_field_update_callback(newImagePath)
                         }
                     }
                     upload_photo(minioClient, newImagePath.bucket, filepaths[i], upload_photo_callback)
@@ -631,32 +742,46 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
             }
 
         } else { //they are not adding any new images.
+            
             if(req.body.reorder_photos){ //they are trying to reorder their existing photos, but not add new ones. (could still be deleting)
-                //check to make sure that none of the keys are -1
-                //const hasValue = Object.values(req.body.reorder_photos).includes(-1);
-                function rearrange(reorder_photos:any, prevImagePath:any):object{
-                    let newImagePath:any = {bucket: prevImagePath['bucket']}
-                    //loop through and reassign the object names to the right spots.
-                    for (var key of Object.keys(reorder_photos)) {
-                        if(reorder_photos[key] == -1) { //skip the new ones for this function.
-                            continue
-                        }
-                        newImagePath[key] = prevImagePath[reorder_photos[key]]
+                
+                //there should not be any -1 values, becuause that means new image.
+                for(var key of Object.keys(req.body.reorder_photos)){
+                    if(req.body.reorder_photos[key] == -1){
+                        res.json({error: "if you are not uploading an image file, reorder_photos should not contain -1"})
+                        return 
                     }
-                    //returns new image path
-                    return newImagePath
                 }
+
                 //compare the lengths of the previous count, to the length of the reorder photos to see if they deleted some
                 if(count > req.body.reorder_photos.length){ //they deleted at least a photo as well as rearranging.
                     //find the deleted photo(s) and delete them from the minio container
 
+                    //we need to figure out which values prevImagePath did not show up in reorder_photos as a value.
+                    let seen:boolean[] = new Array(count).fill(false); //which of the prevImagePath locations were used
+                    for(var key of Object.keys(req.body.reorder_photos)){
+                        seen[req.body.reorder_photos[key]] = true;
+                    }
+
+                    let minioClient:any = connect_minio()
+                    //now find the ones that weren't used and delete them
+                    for(let i = 0; i < seen.length; i++ ){
+                        if(seen[i] == false){
+                            await delete_file_in_minio(minioClient, prevImagePath['bucket'], prevImagePath[i])
+                        }
+                    }
+
+                    //then rearrange and callback
+                    const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
+                    standard_field_update_callback(newImagePath)
                 } else { //they are simply rearranging their photos
                     const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
                     standard_field_update_callback(newImagePath)
                 }
 
 
-            } else { //they are not trying to reorder photos, but simply update other fields.
+            } else { //they are not trying to reorder photos, but simply update other fields. //PARTIALLY TESTED
+                console.log("not trying to reorder or upload files, just trying to modify other fields.")
                 standard_field_update_callback()
             }
 

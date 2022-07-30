@@ -70,7 +70,17 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
     return returnObject;
 }
 
+export async function delete_file_in_minio(minioClient:any, bucketName:string, objectName:string){
+    minioClient.removeObject(bucketName, objectName, function(err:Error) {
+        if (err) {
+          return console.log('Unable to remove object', err)
+        }
+        console.log('Removed the object: ' + objectName)
+      })
+}
+
 export default async function upload_photo(minioClient:any, bucketName:string, imagePath:string, callback:Function, metaData?:any, ){
+    console.log("inside upload_photo")
     if(!metaData){
         metaData = {
             hello : "hi"
@@ -82,7 +92,9 @@ export default async function upload_photo(minioClient:any, bucketName:string, i
         if(err){
             return console.log(err)
         }
+        console.log("object: " + objName + " was sent to the minio bucket.")
         await delete_file(imagePath).then(async () => {
+            console.log("file deleted")
             await callback(objName)
         })
     });
@@ -146,3 +158,4 @@ export function get_num_images_from_imagePath(imagePath:Object):number {
     //subtract one for the bucket
     return Object.keys(imagePath).length - 1;
 }
+
