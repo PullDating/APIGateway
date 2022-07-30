@@ -9,7 +9,7 @@ import { Request, Response, Router } from 'express';
 
 
 
-const {passThrough} = require('stream');
+const { passThrough } = require('stream');
 
 //sequelize models.
 import Account from './models/account';
@@ -21,7 +21,7 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import {connect_minio, set_user_photos_from_path, get_user_photos, delete_files} from './components/object_store/minio_utils';
+import { connect_minio, set_user_photos_from_path, get_user_photos, delete_files } from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
@@ -29,7 +29,7 @@ import { privateEncrypt } from 'crypto';
 import { any, array } from 'joi';
 import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
 
-import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT} from "./config";
+import { MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT } from "./config";
 import { Stream, Writable } from 'stream';
 
 
@@ -40,7 +40,7 @@ const Minio = require('minio'); //for object storage
 //const path = require('path');
 //const Busboy = require('busboy'); //for file uploads
 
-const multer  = require('multer') //package used for parsing multi-part form data.
+const multer = require('multer') //package used for parsing multi-part form data.
 const upload = multer() //used for the text only form-data endpoints.
 const multer_profile_photos_upload = multer({ dest: 'uploads/' })//used for photo upload form-data endpoints
 
@@ -61,12 +61,16 @@ app.use('/', router);
 
 //joi schemas
 
+let datingGoalOptions: string[] = ['longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure']
+let bodyTypeOptions: string[] = ['lean', 'average', 'muscular', 'heavy', 'obese']
+let genderOptions: string[] = ['man', 'woman', 'non-binary']
+
 const create_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     name: Joi.string().alphanum().max(50).required(),
     birthDate: Joi.date().required(),
-    gender: Joi.string().valid('man','woman','non-binary').required(),
+    gender: Joi.string().valid(genderOptions).required(),
     height: Joi.number().min(0).max(304.8).required(),
     // imagePath: Joi.object().keys({
     //     "bucket" : Joi.string().required(),
@@ -81,9 +85,9 @@ const create_profile_schema = Joi.object({
     //     8 : Joi.string(),
     //     9 : Joi.string(),
     // }).required(),
-    datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').required(),
+    datingGoal: Joi.string().valid(datingGoalOptions).required(),
     biography: Joi.string().max(300).required(),
-    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').required(),
+    bodyType: Joi.string().valid(bodyTypeOptions).required(),
     longitude: Joi.number().required(),
     latitude: Joi.number().required(),
 });
@@ -91,7 +95,7 @@ const create_profile_schema = Joi.object({
 const update_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    gender: Joi.string().valid('man','woman','non-binary').optional(),
+    gender: Joi.string().valid(genderOptions).optional(),
     // imagePath: Joi.object().keys({
     //     "bucket" : Joi.string().required(),
     //     0 : Joi.string().required(),
@@ -105,9 +109,9 @@ const update_profile_schema = Joi.object({
     //     8 : Joi.string(),
     //     9 : Joi.string(),
     // }).optional(),
-    datingGoal: Joi.string().valid('longterm','shortterm','hookup','marriage','justchatting','unsure').optional(),
+    datingGoal: Joi.string().valid(datingGoalOptions).optional(),
     biography: Joi.string().max(300).optional(),
-    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').optional(),
+    bodyType: Joi.string().valid(bodyTypeOptions).optional(),
     longitude: Joi.number().optional(),
     latitude: Joi.number().optional(),
 });
@@ -122,7 +126,8 @@ const swipe_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     target_uuid: Joi.string().guid().required(),
-    type: Joi.number().valid(0,1,3,4).required()
+    type: Joi.number().valid(0, 1, 3, 4).required(),
+    datingGoal: Joi.string().valid(datingGoalOptions).required()
 });
 
 const create_filter_schema = Joi.object({
@@ -182,9 +187,9 @@ app.get('/', (request: Request, responsed: Response) => {
     response.redirect('https://pulldating.tips');
 });
 
-app.get('/test', (req:Request, res:Response) => {
+app.get('/test', (req: Request, res: Response) => {
     console.log(req.body);
-    res.json({message: "This is just a test function"})
+    res.json({ message: "This is just a test function" })
 })
 
 /*
@@ -210,28 +215,28 @@ Outputs:
 - uuid: string //the uuid of the user so that they can cache it on device
 - token: string //the api token/key that is cached on the user's device that allows them to make calls to the rest of the api.
 */
-app.post('/account/get_auth', async (req:Request,res:Response) => {
+app.post('/account/get_auth', async (req: Request, res: Response) => {
     //TODO add the functionality in another file and call it here.
-    
+
     const body = req.body;
     //check to ensure that the required parameter is present. 
-    if(!body.phone) {
-        res.status(400).json({message: "Required parameter 'phone' is missing"});
+    if (!body.phone) {
+        res.status(400).json({ message: "Required parameter 'phone' is missing" });
         return;
     }
-    let phone:string = body.phone;
+    let phone: string = body.phone;
     //verify that the phone number is in a valid format.
     if (!phone.match(/^(\+?\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/)) {
-        res.status(400).json({message: "Parameter 'phone' is invalid"});
-         return;
-     }
-     // Normalize the phone number into a string like '+13324882155'
+        res.status(400).json({ message: "Parameter 'phone' is invalid" });
+        return;
+    }
+    // Normalize the phone number into a string like '+13324882155'
     phone = phone.replace(/[^\d+]+/g, '');
     phone = phone.replace(/^00/, '+');
     if (phone.match(/^1/)) phone = '+' + phone;
     if (!phone.match(/^\+/)) phone = '+1' + phone;
     //check to see if the user with the phone number already exists.
-    let userExists:boolean = false;
+    let userExists: boolean = false;
     try {
         const search = await Account.findAll({
             where: {
@@ -239,25 +244,25 @@ app.post('/account/get_auth', async (req:Request,res:Response) => {
             }
         });
         console.log(`search: ${search}`);
-        if(search.length == 0){
+        if (search.length == 0) {
             console.log("phone search result was empty");
             userExists = false;
-        }else{
+        } else {
             console.log("phone search result was not empty");
             userExists = true;
         }
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
 
     //TODO hook this up with the firebase auth.
 
-    if(body.sms_code){ //if the sms code is entered.
-        
-    }else{ //if the sms code is not entered
-        
+    if (body.sms_code) { //if the sms code is entered.
+
+    } else { //if the sms code is not entered
+
     }
 
     //use this code to generate an auth_token for 1 year in future
@@ -271,21 +276,21 @@ app.post('/account/get_auth', async (req:Request,res:Response) => {
 
 
 
-    res.json({result: "Eh. whatever"});
+    res.json({ result: "Eh. whatever" });
 });
 
 //to allow users to delete their account (set it to the deleted state)
-app.put('/account/delete', async (req:Request,res:Response) => {
+app.put('/account/delete', async (req: Request, res: Response) => {
 
 });
 
 //to allow the user to set their account to the paused state, to take them out of the active queue
-app.put('/account/pause', async (req:Request,res:Response) => {
+app.put('/account/pause', async (req: Request, res: Response) => {
 
 });
 
 //to allow the user to re-enter the active queue. 
-app.put('/account/unpause', async (req:Request, res:Response) => {
+app.put('/account/unpause', async (req: Request, res: Response) => {
 
 })
 // /profile hosts api endpoints to do with managing, creating and deleting user profiles. 
@@ -305,41 +310,59 @@ Inputs:
 - uuid: string
 - latitude: float
 - longitude: float
+
+need to add a few more things:
+reorder_photos: {
+    "previous order location" : "new order location"
+    ...
+    ...
+}
+//ensure that the total number of photos does not exceed the total.
+add_photos: {
+    "index in filepaths" : "new order location"
+}
+delete_photos: {
+    "old order location" : 
+}
+
+
 Outputs:
 - 
 */
-app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos) , async (req:Request, res:Response) => {
+app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
     //TODO add the functionality in another file and call it here.
 
     //get the file paths for the newly uploaded files.
-    var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
+    var filepaths = (req.files as Array<Express.Multer.File>).map(function (file: any) {
         return file.path;
     });
 
     //check to ensure they supplied the required authentication field.
-    if(req.headers.authorization == null){
+    if (req.headers.authorization == null) {
         //clean up the dead files. 
         await delete_files(filepaths);
-        res.json({error: "Authentication token was not supplied."});
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
 
     //create input object that pushes together the req body and auth headers.
-    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
         //validate it with the relevant schema 
         const value = await create_profile_schema.validateAsync(input)
 
-    } catch (err){ //if there was a problem with validation
-        
+    } catch (err) { //if there was a problem with validation
+
         console.log("did not pass schema validation.")
         console.log(err)
         //clean up the dead files
         await delete_files(filepaths);
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
+    //not sure if this is relevant
+    /*
     //verify that the person has entered at least the minimum number of photos
     if(filepaths.length < minProfilePhotos || filepaths.length > maxProfilePhotos){
         console.log("received an invalid number of photos")
@@ -349,116 +372,125 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         res.json({error: "Invaild number of photos"})
         return
     }
+    */
+
+    //this is where the logic gets a bit complicated. If someone wants to reorder photos, how do we handle that, surely
+    //we don't want to reupload all the photos? How would we handle a reupload and a reorganization.
 
     //at the point, the schema is valid, just need to check that the values are logical.
 
     //verify that the uuid/auth token pair exists in the auth table.
-    let verifyresult:number = -1;
+    let verifyresult: number = -1;
     try {
         //check to see if the auth is valid. 
         verifyresult = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) { //if there was an error in the validation.
+    } catch (err: any) { //if there was an error in the validation.
         console.error(err.stack);
         //clean up the dead files.
         await delete_files(filepaths);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
 
     //if the result of the validation was invalid (aka they didn't match)
-    if(verifyresult != 0){
+    if (verifyresult != 0) {
         //clean up the dead files
         await delete_files(filepaths);
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
     //check to ensure that a person doesn't exist with the provided profile.
     await Profile.count({ where: { uuid: req.body.uuid } })
-      .then(async count => {
-        if (count != 0) { //if someone already exists.
-            console.log()
-            //clean up dead files
-            await delete_files(filepaths)
-            res.json({error: "Cannot post a profile if one already exists, try calling put instead"})
-            return;
-        } else { //if no one exists (expected route)
-            console.log("Attempting to send the photos from profile get.")
-            //get the minio client
-            let minioClient = connect_minio();
-    
-            //callback that makes the create Profile query after uploading the photos
-            async function callback(req:Request, imageDatabastObject:Object){
-                //console.log("Got into callback")
+        .then(async count => {
+            if (count != 0) { //if someone already exists.
+                console.log()
+                //clean up dead files
+                await delete_files(filepaths)
+                res.json({ error: "Cannot post a profile if one already exists, try calling put instead" })
+                return;
+            } else { //if no one exists (expected route)
+                console.log("Attempting to send the photos from profile get.")
+                //get the minio client
+                let minioClient = connect_minio();
 
-                //create profile within the database.
-                const profile = new Profile({
-                    uuid: req.body.uuid,
-                    name: req.body.name,
-                    birthDate: req.body.birthDate,
-                    gender: req.body.gender,
-                    height: req.body.height,
-                    imagePath: imageDatabaseObject,
-                    datingGoal: req.body.datingGoal,
-                    biography: req.body.biography,
-                    bodyType: req.body.bodyType,
-                    lastLocation: { type: 'Point', coordinates: [req.body.longitude,req.body.latitude]},
-                });
-                await profile.save();
+                //callback that makes the create Profile query after uploading the photos
+                async function callback(req: Request, imageDatabastObject: Object) {
+                    //console.log("Got into callback")
 
-                //update the account table to reflect the fact that they now have a profile.
-                const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-                if (account) {
-                    account.state = 1;
-                    await account.save();
-                } else { //the ordering of this is bad, but this shouldn't occur.
-                    console.log("User account not found, couldn't update state");
-                    //TODO Do something to correct for this issue if it occurs. 
+                    //create profile within the database.
+                    const profile = new Profile({
+                        uuid: req.body.uuid,
+                        name: req.body.name,
+                        birthDate: req.body.birthDate,
+                        gender: req.body.gender,
+                        height: req.body.height,
+                        imagePath: imageDatabaseObject,
+                        datingGoal: req.body.datingGoal,
+                        biography: req.body.biography,
+                        bodyType: req.body.bodyType,
+                        lastLocation: { type: 'Point', coordinates: [req.body.longitude, req.body.latitude] },
+                    });
+                    await profile.save();
+
+                    //update the account table to reflect the fact that they now have a profile.
+                    const account = await Account.findOne({ where: { uuid: req.body.uuid } });
+                    if (account) {
+                        account.state = 1;
+                        await account.save();
+                    } else { //the ordering of this is bad, but this shouldn't occur.
+                        console.log("User account not found, couldn't update state");
+                        //TODO Do something to correct for this issue if it occurs. 
+                    }
+                    //success message
+                    res.json({ message: "profile created" })
                 }
-                //success message
-                res.json({message : "profile created"})
+
+                //this actually executues both the upload and the file deletion in sequence. 
+                const imageDatabaseObject: Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
+
             }
-
-        //this actually executues both the upload and the file deletion in sequence. 
-        const imageDatabaseObject:Object = await set_user_photos_from_path(req.body.uuid, filepaths, minioClient, callback, req)
-
-        }
-    });
+        });
 });
 
 //to update an existing profile within the application.
-app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos) ,async (req:Request, res:Response) => {
+app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
 
-    if(req.headers.authorization == null){
-        res.json({error: "Authentication token was not supplied."});
+    //get the file paths for the newly uploaded files.
+    var filepaths = (req.files as Array<Express.Multer.File>).map(function (file: any) {
+        return file.path;
+    });
+
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
     //let value:any;
-    let value:any;
-    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    let value: any;
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
         value = await update_profile_schema.validateAsync(input)
-    } catch (err){
+    } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
     //console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let result: number = -1;
     try {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
     //if invalid, return without completing. 
-    if(result != 0){
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
@@ -467,32 +499,32 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
     const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
     if (profile) {
-        if(value['gender']){
-            profile.gender = value['birthDate']
+        if (value['gender']) {
+            profile.gender = value['gender']
         }
-        if(value['height']){
+        if (value['height']) {
             profile.height = value['height']
         }
-        if(value['datingGoal']){
+        if (value['datingGoal']) {
             profile.datingGoal = value['datingGoal']
         }
-        if(value['biography']){
+        if (value['biography']) {
             profile.biography = value['biography']
         }
-        if(value['bodyType']){
+        if (value['bodyType']) {
             profile.bodyType = value['bodyType']
         }
-        if(value['longitude'] && value['latitude']){
-            const long:number = value['longitude']
-            const lat:number = value['latitude']
-            profile.lastLocation = { type: 'Point', coordinates: [long,lat] }
+        if (value['longitude'] && value['latitude']) {
+            const long: number = value['longitude']
+            const lat: number = value['latitude']
+            profile.lastLocation = { type: 'Point', coordinates: [long, lat] }
         }
         await profile.save();
     } else {
         console.log("User profile not found, couldn't update state");
     }
 
-    res.json({message: "Profile updated."});
+    res.json({ message: "Profile updated." });
 })
 
 //to allow a user application to receive information about their own profile, or another.
@@ -502,23 +534,23 @@ inputs:
 outputs:
 - profile object. 
 */
-app.get('/profile', upload.none(), async (req:Request, res:Response) => {
+app.get('/profile', upload.none(), async (req: Request, res: Response) => {
 
     console.log("called get profile")
     console.log(req.body);
 
-    if(req.headers.authorization == null){
-        res.json({error: "Authentication token was not supplied."});
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
-    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
         const value = await simple_get_schema.validateAsync(input)
-    } catch (err){
+    } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
     //console.log("Got past schema validation.")
@@ -526,107 +558,107 @@ app.get('/profile', upload.none(), async (req:Request, res:Response) => {
     //still doing authentication to prevent spammed requests. 
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let result: number = -1;
     try {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
 
     //if invalid, return without completing. 
-    if(result != 0){
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
-    async function callback(profile:Profile|null){ //this is what will be called once the profile is found.
+    async function callback(profile: Profile | null) { //this is what will be called once the profile is found.
         console.log("%cgot into callback", "color: orange")
-        if(profile != null){
+        if (profile != null) {
             console.log("profile was not null")
             //look at the provided bucket and image names, and retrieve presigned get links. 
 
             //connect to minio service
             let minioClient = connect_minio();
 
-            const bucket:string = profile.imagePath['bucket'];
+            const bucket: string = profile.imagePath['bucket'];
             console.log(profile.imagePath)
             console.log(`got bucket name: ${bucket}`)
             let count = Object.keys(profile.imagePath).length; //number of items in the json (images + bucket)
             count = count - 1
             console.log(`got count: ${count}`)
             //subtract one for the bucket key, which is not an image identifier. 
-            
+
             //I need a different strategy, passing callbacks a specific number of times
-            let countfinished:number = 0;
+            let countfinished: number = 0;
             //what is passed as the callback to the top level minio client and then down through the rest. 
-            async function callback(err:Error, presignedURL:string){
-                if(err) return console.log(err)
+            async function callback(err: Error, presignedURL: string) {
+                if (err) return console.log(err)
                 profile!.imagePath[countfinished] = presignedURL
                 countfinished++
-                if(countfinished < count){
+                if (countfinished < count) {
                     //call make another minio request.
                     const object = profile!.imagePath[countfinished]
-                    await minioClient.presignedGetObject(bucket, object, (err:Error, presignedURL:string) => callback(err, presignedURL))
+                    await minioClient.presignedGetObject(bucket, object, (err: Error, presignedURL: string) => callback(err, presignedURL))
                 } else {
                     //send the response
-                    res.json({profile})
+                    res.json({ profile })
                     return
                 }
             }
-            
+
             const object = profile!.imagePath[countfinished]
-            await minioClient.presignedGetObject(bucket, object, (err:Error, presignedURL:string) => callback(err, presignedURL))
+            await minioClient.presignedGetObject(bucket, object, (err: Error, presignedURL: string) => callback(err, presignedURL))
 
         } else {
-            res.json({error: "User profile could not be found."});
+            res.json({ error: "User profile could not be found." });
             return
         }
     }
 
-    if(req.body.target){ //return the profile of the target
+    if (req.body.target) { //return the profile of the target
         await Profile.findOne({ where: { uuid: req.body.target } }).then((profile) => callback(profile));
-    }else{ //return the profile of the person that made the call
+    } else { //return the profile of the person that made the call
         await Profile.findOne({ where: { uuid: req.body.uuid } }).then((profile) => callback(profile));
     }
 
-    
+
 })
 
 //allow a user to "like" another person
-app.post('/swipe', async (req:Request, res:Response) => {
+app.post('/swipe', async (req: Request, res: Response) => {
     //authentication
-    if(req.headers.authorization == null){
-        res.json({error: "Authentication token was not supplied."});
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
     //let value:any;
-    let value:any;
-    let input = Object.assign(req.body, {token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1)});
+    let value: any;
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
         value = await swipe_schema.validateAsync(input)
-    } catch (err){
+    } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
     //console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let result: number = -1;
     try {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
     //if invalid, return without completing. 
-    if(result != 0){
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
@@ -636,136 +668,200 @@ app.post('/swipe', async (req:Request, res:Response) => {
 
     //we keep track of both entries becuase we want to have a sense of possession as well as state.
 
-    const sentswipe = await Swipe.findOne({where: {uuid: req.body.uuid, target_uuid: req.body.target_uuid}});
-    const receivedswipe = await Swipe.findOne({where: {uuid: req.body.target_uuid, target_uuid: req.body.uuid}});
+    //get the datinggoal of the person sending the request:
+    await Profile.findOne({ attributes: ['datingGoal'], where: { uuid: req.body.uuid } }).then(async (profile) => {
+        if (profile) {//found profile
+            let datingGoal = profile.datingGoal
+            //now that we have verified the dating goal, determine if they have sent a swipe of this type and if they've received it
+            const sentswipe = await Swipe.findOne({ where: { uuid: req.body.uuid, target_uuid: req.body.target_uuid, datingGoal: datingGoal } });
+            const receivedswipe = await Swipe.findOne({ where: { uuid: req.body.target_uuid, target_uuid: req.body.uuid, datingGoal: datingGoal} });
 
-    //2 is not possible because you cannot force a match, it is done through likes. 
-    switch(req.body.type){
-        case 0: //dislike
-            if(!sentswipe){ //if no previous swipe, send a dislike. 
-                Swipe.create({
-                    target_uuid: req.body.target_uuid,
-                    uuid: req.body.uuid,
-                    type: 0
-                })
-            }
-            break;
-        case 1: //like
-            if(!sentswipe){ //if no previous swipe, send a like
-                Swipe.create({
-                    target_uuid: req.body.target_uuid,
-                    uuid: req.body.uuid,
-                    type: 1
-                })
-                //then see if the other person has liked you
-                if(receivedswipe && receivedswipe['type'] == 1){
-                    //congrats, you have a match.
-                    //update your like to a match.
-                    Swipe.update(
-                        {
-                            type: 2
-                        },
-                        { where: {
+            //now do the logic based on these values.
+            //2 is not possible because you cannot force a match, it is done through likes. 
+            switch (req.body.type) {
+                case 0: //dislike
+                    if (!sentswipe) { //if no previous swipe, send a dislike. 
+                        Swipe.create({
                             target_uuid: req.body.target_uuid,
                             uuid: req.body.uuid,
-                        } }
-                    )
-                    //update their like to a match.
-                    Swipe.update(
-                        {
-                            type: 2
-                        },
-                        { where: {
-                            target_uuid: req.body.uuid,
-                            uuid: req.body.target_uuid,
-                        } }
-                    )
-                }
-            } else if(sentswipe && sentswipe!['type'] == 0){ //allow them to upgrade a dislike to a like.
-                Swipe.update(
-                    {
-                        type: 1
-                    },
-                    { where: {
-                        target_uuid: req.body.target_uuid,
-                        uuid: req.body.uuid,
-                    } }
-                  )
-            }
-            break;
-        case 3: //unmatch
-            //update both entries to unmatched. sad...
-            Swipe.update(
-                {
-                   type: 3
-                },
-                { where: {
-                    target_uuid: req.body.target_uuid,
-                    uuid: req.body.uuid,
-                } }
-            )
-            Swipe.update(
-                {
-                    type: 3
-                },
-                { where: {
-                    target_uuid: req.body.uuid,
-                    uuid: req.body.target_uuid,
-                } }
-            )
-            break;
-        case 4: //block
-            //update entry to be blocking the other person. 
-            //if the other person's entry is matched, change to unmatched
-            if(receivedswipe && receivedswipe['type'] == 2){
-                Swipe.update(
-                    {
-                        type: 3 //set to unmatched.
-                    },
-                    {
-                        where: {
-                            uuid: req.body.target_uuid,
-                            target_uuid: req.body.uuid
+                            type: 0,
+                            datingGoal: datingGoal
+                        }).then(() => {
+                            res.json({message: "dislike sent"})
+                        })
+                    } else {
+                        res.json({error: "a previous swipe existed, thus you shouldn't have been shown this. Please report"})
+                    }
+                    break;
+                case 1: //like
+                    
+                    function create_match_callback() {
+                        if (receivedswipe && receivedswipe['type'] == 1) {
+                            //congrats, you have a match.
+                            //update your like to a match.
+                            Swipe.update(
+                                {
+                                    type: 2
+                                },
+                                {
+                                    where: {
+                                        target_uuid: req.body.target_uuid,
+                                        uuid: req.body.uuid,
+                                        datingGoal: datingGoal
+                                    }
+                                }
+                            ).then(() => {
+                                //update their like to a match.
+                                Swipe.update(
+                                    {
+                                        type: 2
+                                    },
+                                    {
+                                        where: {
+                                            target_uuid: req.body.uuid,
+                                            uuid: req.body.target_uuid,
+                                            datingGoal: datingGoal
+                                        }
+                                    }
+                                ).then(() => {
+                                    res.json({message: "match created!"})
+                                    return
+                                })
+                            })
+                            
+                        }else{
+                            res.json({message: "like created"})
                         }
                     }
-                )
+
+                    if (!sentswipe) { //if no previous swipe, send a like
+                        Swipe.create({
+                            target_uuid: req.body.target_uuid,
+                            uuid: req.body.uuid,
+                            type: 1,
+                            datingGoal: datingGoal
+                        }).then(() => create_match_callback)
+                        //then see if the other person has liked you
+                    } else if (sentswipe && sentswipe!['type'] == 0) { //allow them to upgrade a dislike to a like.
+                        Swipe.update(
+                            {
+                                type: 1
+                            },
+                            {
+                                where: {
+                                    target_uuid: req.body.target_uuid,
+                                    uuid: req.body.uuid,
+                                    datingGoal: datingGoal
+                                }
+                            }
+                        ).then(() => create_match_callback)
+                    }
+                    break;
+                case 3: //unmatch
+                    //update both entries to unmatched. sad...
+                    Swipe.update({
+                        type: 3
+                    },
+                        {
+                            where: {
+                                target_uuid: req.body.target_uuid,
+                                uuid: req.body.uuid,
+                                datingGoal: datingGoal
+                            }
+                        }
+                    ).then(() => {
+                        Swipe.update(
+                            {
+                                type: 3
+                            },
+                            {
+                                where: {
+                                    target_uuid: req.body.uuid,
+                                    uuid: req.body.target_uuid,
+                                    datingGoal: datingGoal
+                                }
+                            }
+                        ).then(() => {
+                            res.json({message: "unmatch complete"})
+                        })
+                    })
+                    break;
+                case 4: //block
+                    //update entry to be blocking the other person. 
+
+                    function block_callback(){
+
+                        //if no previous swipe exists
+                        if (!sentswipe) {
+                            Swipe.create({
+                                target_uuid: req.body.target_uuid,
+                                uuid: req.body.uuid,
+                                type: 4,
+                                datingGoal: datingGoal
+                            }).then(() => {
+                                res.json({message: "user blocked"})
+                            })
+                        } else {
+                            Swipe.update(
+                                {
+                                    type: 4
+                                },
+                                {
+                                    where: {
+                                        target_uuid: req.body.target_uuid,
+                                        uuid: req.body.uuid,
+                                        datingGoal: datingGoal
+                                    }
+                                }
+                            ).then(()=> {
+                                res.json({message: "user blocked"})
+                            })
+                        }
+                    }
+
+                    //if the other person's entry is matched, change to unmatched
+                    if (receivedswipe && receivedswipe['type'] == 2) {
+                        Swipe.update(
+                            {
+                                type: 3 //set to unmatched.
+                            },
+                            {
+                                where: {
+                                    uuid: req.body.target_uuid,
+                                    target_uuid: req.body.uuid,
+                                    datingGoal: datingGoal
+                                }
+                            }
+                        ).then(() => block_callback)
+                    } else { //if they are not matched, just call the rest of the functionality
+                        block_callback()
+                    }
+
+                    break;
             }
 
-            if(!sentswipe){
-                Swipe.create({
-                    target_uuid: req.body.target_uuid,
-                    uuid: req.body.uuid,
-                    type: 4
-                })
-            } else {
-                Swipe.update(
-                    {
-                       type: 4
-                    },
-                    { where: {
-                        target_uuid: req.body.target_uuid,
-                        uuid: req.body.uuid,
-                    } }
-                 )
-            }
-            
-            break;
-    }
-    res.json({message: "Swipe Executed"});
+        } else { //return an error.
+            res.json({ error: "could not find a profile that matched the uuid " })
+            return
+        }
+
+    });
+
+    res.json({ message: "Swipe Executed" });
 });
 
 //set the filters for a profile for the first time 
-app.post('/filter', async (req:Request, res:Response) => {
+app.post('/filter', async (req: Request, res: Response) => {
 
     //console.log(req.body);
 
     //authentication
-    if(req.headers.authorization == null){
-        res.json({error: "Authentication token was not supplied."});
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
     //let value:any;
-    let value:any;
+    let value: any;
     let inputNoToken = Object.assign({
         uuid: req.body.uuid,
         minBirthDate: req.body.birthDate.min,
@@ -784,117 +880,117 @@ app.post('/filter', async (req:Request, res:Response) => {
     })
 
     let input = Object.assign(inputNoToken, {
-        token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
     });
 
     try {
         value = await create_filter_schema.validateAsync(input)
-    } catch (err){
+    } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
     console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let result: number = -1;
     try {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
     //if invalid, return without completing. 
-    if(result != 0){
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
     //check to see if one exists already, if so, ignore it.
-    const existingFilter = await Filter.findOne({where: {uuid: req.body.uuid}});
-    if(!existingFilter){
+    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+    if (!existingFilter) {
         console.log("creating filter");
         Filter.create(inputNoToken);
-        res.json({message: "filter created"});
+        res.json({ message: "filter created" });
     }
-    else{
-        res.json({message: "filter already existed, try put if you intend to modify."});
+    else {
+        res.json({ message: "filter already existed, try put if you intend to modify." });
     }
 
 });
 
 //update the filters for a user
-app.put('/filter', async (req:Request, res:Response) => {
+app.put('/filter', async (req: Request, res: Response) => {
     //authentication
-    if(req.headers.authorization == null){
-        res.json({error: "Authentication token was not supplied."});
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
         return
     }
     //let value:any;
-    let value:any;
+    let value: any;
 
     //need to modify this to be ok it is not present maybe with ? or :? idk.
     let inputNoToken = {
         uuid: req.body.uuid,
-        ...(req.body.birthDate.min && {minBirthDate : req.body.birthDate.min}),
-        ...(req.body.birthDate.max && {maxBirthDate : req.body.birthDate.max}),
-        ...(req.body.height.min && {minHeight : req.body.height.min}),
-        ...(req.body.height.max && {maxHeight : req.body.height.max}),
-        ...(req.body.gender.man && {genderMan : req.body.gender.man}),
-        ...(req.body.gender.woman && {genderWoman : req.body.gender.woman}),
-        ...(req.body.gender.nonBinary && {genderNonBinary : req.body.gender.nonBinary}),
-        ...(req.body.bodyType.lean && {btLean : req.body.bodyType.lean}),
-        ...(req.body.bodyType.average && {btAverage : req.body.bodyType.average}),
-        ...(req.body.bodyType.muscular && {btMuscular : req.body.bodyType.muscular}),
-        ...(req.body.bodyType.heavy && {btHeavy : req.body.bodyType.heavy}),
-        ...(req.body.bodyType.obese && {btObese : req.body.bodyType.obese}),
-        ...(req.body.maxDistance && {maxDistance : req.body.maxDistance})
+        ...(req.body.birthDate.min && { minBirthDate: req.body.birthDate.min }),
+        ...(req.body.birthDate.max && { maxBirthDate: req.body.birthDate.max }),
+        ...(req.body.height.min && { minHeight: req.body.height.min }),
+        ...(req.body.height.max && { maxHeight: req.body.height.max }),
+        ...(req.body.gender.man && { genderMan: req.body.gender.man }),
+        ...(req.body.gender.woman && { genderWoman: req.body.gender.woman }),
+        ...(req.body.gender.nonBinary && { genderNonBinary: req.body.gender.nonBinary }),
+        ...(req.body.bodyType.lean && { btLean: req.body.bodyType.lean }),
+        ...(req.body.bodyType.average && { btAverage: req.body.bodyType.average }),
+        ...(req.body.bodyType.muscular && { btMuscular: req.body.bodyType.muscular }),
+        ...(req.body.bodyType.heavy && { btHeavy: req.body.bodyType.heavy }),
+        ...(req.body.bodyType.obese && { btObese: req.body.bodyType.obese }),
+        ...(req.body.maxDistance && { maxDistance: req.body.maxDistance })
     }
 
     console.log(inputNoToken)
 
     let input = Object.assign(inputNoToken, {
-        token : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
     });
 
     try {
         value = await update_filter_schema.validateAsync(input)
-    } catch (err){
+    } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({error: "Inputs were invalid."});
-        return 
+        res.json({ error: "Inputs were invalid." });
+        return
     }
 
     console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
-    let result:number = -1;
+    let result: number = -1;
     try {
         result = await validate_auth(req.body.uuid, req.headers.authorization!);
-    } catch (err:any) {
+    } catch (err: any) {
         console.error(err.stack);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
         return;
     }
     //if invalid, return without completing. 
-    if(result != 0){
-        res.json({error: "Authentication was invalid, please re-authenticate."});
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
     //function specific logic
-    const existingFilter = await Filter.findOne({where: {uuid: req.body.uuid}});
-    if(existingFilter){
+    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+    if (existingFilter) {
         console.log("creating filter");
-        Filter.update(inputNoToken, {where: {uuid: req.body.uuid}});
-        res.json({message: "filter created"});
+        Filter.update(inputNoToken, { where: { uuid: req.body.uuid } });
+        res.json({ message: "filter created" });
     }
-    else{
-        res.json({message: "filter doesn't exist, call post if you intend to create one."});
+    else {
+        res.json({ message: "filter doesn't exist, call post if you intend to create one." });
     }
 
 })
@@ -904,7 +1000,7 @@ app.put('/filter', async (req:Request, res:Response) => {
 inputs: 
 - 
 */
-app.get('/people', async (req:Request, res:Response) => {
+app.get('/people', async (req: Request, res: Response) => {
 
 });
 
@@ -917,7 +1013,7 @@ app.post('/block', async (req:Request,res:Response)=>{
 */
 
 //returns the number of blocks on a user.
-app.get('/block/number', async (req:Request,res:Response)=>{
+app.get('/block/number', async (req: Request, res: Response) => {
 
 })
 
@@ -949,13 +1045,13 @@ app.get('/matches')
 //     console.log(filepaths)
 
 //     //await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
-    
+
 
 //     res.json({message: "god help us all."})
 // });
 
-app.get('/storage/miniotest4', async (req:Request, res:Response) => {
-    let objects:string[] = ['123$0','123$1'];
+app.get('/storage/miniotest4', async (req: Request, res: Response) => {
+    let objects: string[] = ['123$0', '123$1'];
     let minioClient = await connect_minio();
     await get_user_photos(minioClient, 'nanortheast', objects)
 });
@@ -964,8 +1060,8 @@ app.get('/storage/miniotest4', async (req:Request, res:Response) => {
 
 
 // /test stuff is just for messing around. Delete before pushing to main/production
-app.get('/test/1', async (req:Request,res:Response) => {
-    
+app.get('/test/1', async (req: Request, res: Response) => {
+
     //this should not be this broken lol.
     //const person = Account.create({
     //    phone: "6123273482",
@@ -977,12 +1073,12 @@ app.get('/test/1', async (req:Request,res:Response) => {
         expiry: DateTime.local(2025, 2, 11, 11, 11, 11, 11)//new Date().setFullYear(new Date().getFullYear() + 1)
     });
     auth.save();
-    
+
     //res.json({result: "end of test"});
 });
 
 
-app.get('/test/2', async (req:Request,res:Response)=> {
+app.get('/test/2', async (req: Request, res: Response) => {
     /*
     const swipe = new Swipe({
         uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
