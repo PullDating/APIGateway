@@ -4,6 +4,7 @@ const Minio = require('minio'); //for object storage
 const defaultBucket = 'nanortheast';
 const fs = require('fs')
 import { DateTime } from "luxon";
+import { callbackify } from "util";
 var crypto = require("crypto");
 
 
@@ -67,6 +68,24 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
         });
     }
     return returnObject;
+}
+
+export default async function upload_photo(minioClient:any, bucketName:string, imagePath:string, callback:Function, metaData?:any, ){
+    if(!metaData){
+        metaData = {
+            hello : "hi"
+        }
+    }
+    const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
+    await minioClient.fPutObject(bucketName, objName, `./${imagePath}`, metaData, await async function(err: any, objInfo: any) {
+        console.log("Tried fPutObject...")
+        if(err){
+            return console.log(err)
+        }
+        await delete_file(imagePath).then(async () => {
+            await callback(objName)
+        })
+    });
 }
 
 /*
