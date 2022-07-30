@@ -61,16 +61,44 @@ app.use('/', router);
 
 //joi schemas
 
-let datingGoalOptions: string[] = ['longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure']
-let bodyTypeOptions: string[] = ['lean', 'average', 'muscular', 'heavy', 'obese']
-let genderOptions: string[] = ['man', 'woman', 'non-binary']
+/*
+enum bodyTypeOptions {
+    "lean",
+    "average",
+    "muscular",
+    "heavy",
+    "obese"
+}
+
+enum datingGoalOptions {
+    "longterm",
+    "shortterm",
+    "hookup",
+    "marriage",
+    "justchatting",
+    "unsure"
+}
+
+enum genderOptions {
+    "man",
+    "woman",
+    "nonbinary"
+}
+*/
+
+
+
+const datingGoalOptions:any[] = ['longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure'];
+const bodyTypeOptions:any[] = ['lean', 'average', 'muscular', 'heavy', 'obese'];
+const genderOptions:any[] = ['man', 'woman', 'non-binary'];
 
 const create_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     name: Joi.string().alphanum().max(50).required(),
     birthDate: Joi.date().required(),
-    gender: Joi.string().valid(genderOptions).required(),
+    //gender: Joi.array(Joi.string().valid(genderOptions).required()),
+    gender: Joi.string().valid('man', 'woman', 'non-binary').required(),
     height: Joi.number().min(0).max(304.8).required(),
     // imagePath: Joi.object().keys({
     //     "bucket" : Joi.string().required(),
@@ -85,9 +113,9 @@ const create_profile_schema = Joi.object({
     //     8 : Joi.string(),
     //     9 : Joi.string(),
     // }).required(),
-    datingGoal: Joi.string().valid(datingGoalOptions).required(),
+    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').required(),
     biography: Joi.string().max(300).required(),
-    bodyType: Joi.string().valid(bodyTypeOptions).required(),
+    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').required(),
     longitude: Joi.number().required(),
     latitude: Joi.number().required(),
 });
@@ -95,7 +123,7 @@ const create_profile_schema = Joi.object({
 const update_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    gender: Joi.string().valid(genderOptions).optional(),
+    gender: Joi.string().valid('man', 'woman', 'non-binary').optional(),
     // imagePath: Joi.object().keys({
     //     "bucket" : Joi.string().required(),
     //     0 : Joi.string().required(),
@@ -109,9 +137,9 @@ const update_profile_schema = Joi.object({
     //     8 : Joi.string(),
     //     9 : Joi.string(),
     // }).optional(),
-    datingGoal: Joi.string().valid(datingGoalOptions).optional(),
+    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').optional(),
     biography: Joi.string().max(300).optional(),
-    bodyType: Joi.string().valid(bodyTypeOptions).optional(),
+    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').optional(),
     longitude: Joi.number().optional(),
     latitude: Joi.number().optional(),
 });
@@ -127,7 +155,7 @@ const swipe_schema = Joi.object({
     uuid: Joi.string().guid().required(),
     target_uuid: Joi.string().guid().required(),
     type: Joi.number().valid(0, 1, 3, 4).required(),
-    datingGoal: Joi.string().valid(datingGoalOptions).required()
+    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').required()
 });
 
 const create_filter_schema = Joi.object({
@@ -332,10 +360,20 @@ Outputs:
 app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
     //TODO add the functionality in another file and call it here.
 
+    console.log(req.files);
     //get the file paths for the newly uploaded files.
     var filepaths = (req.files as Array<Express.Multer.File>).map(function (file: any) {
         return file.path;
     });
+
+    //checking for the correct number of photos on upload, and for empty array. 
+    if(filepaths.length < minProfilePhotos || filepaths.length > maxProfilePhotos || !filepaths){
+        if(filepaths.length != 0 && filepaths){
+            await delete_files(filepaths)
+        }
+        res.json({error: "wrong number of photos entered"})
+        return
+    } 
 
     //check to ensure they supplied the required authentication field.
     if (req.headers.authorization == null) {
@@ -400,6 +438,10 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return
     }
 
+    
+
+    //function specific logic
+
     //check to ensure that a person doesn't exist with the provided profile.
     await Profile.count({ where: { uuid: req.body.uuid } })
         .then(async count => {
@@ -411,6 +453,7 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
                 return;
             } else { //if no one exists (expected route)
                 console.log("Attempting to send the photos from profile get.")
+                console.log(`Filepaths: ${filepaths}`)
                 //get the minio client
                 let minioClient = connect_minio();
 
@@ -499,32 +542,46 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
     const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
     if (profile) {
-        if (value['gender']) {
-            profile.gender = value['gender']
+
+        async function standard_field_update_callback(){
+            if (value['gender']) {
+                profile!.gender = value['gender']
+            }
+            if (value['height']) {
+                profile!.height = value['height']
+            }
+            if (value['datingGoal']) {
+                profile!.datingGoal = value['datingGoal']
+            }
+            if (value['biography']) {
+                profile!.biography = value['biography']
+            }
+            if (value['bodyType']) {
+                profile!.bodyType = value['bodyType']
+            }
+            if (value['longitude'] && value['latitude']) {
+                const long: number = value['longitude']
+                const lat: number = value['latitude']
+                profile!.lastLocation = { type: 'Point', coordinates: [long, lat] }
+            }
+    
+            await profile!.save().then(()=> {
+                res.json({message: "Profile updated"})
+                return
+            });
         }
-        if (value['height']) {
-            profile.height = value['height']
+
+        if(filepaths.length > 0){ //they are trying to update their images.
+            //update the images and call callback
+
+        }else{ //they are simply trying to update their normal fields. 
+            await standard_field_update_callback()
         }
-        if (value['datingGoal']) {
-            profile.datingGoal = value['datingGoal']
-        }
-        if (value['biography']) {
-            profile.biography = value['biography']
-        }
-        if (value['bodyType']) {
-            profile.bodyType = value['bodyType']
-        }
-        if (value['longitude'] && value['latitude']) {
-            const long: number = value['longitude']
-            const lat: number = value['latitude']
-            profile.lastLocation = { type: 'Point', coordinates: [long, lat] }
-        }
-        await profile.save();
     } else {
         console.log("User profile not found, couldn't update state");
     }
 
-    res.json({ message: "Profile updated." });
+    //res.json({ message: "Profile updated." });
 })
 
 //to allow a user application to receive information about their own profile, or another.

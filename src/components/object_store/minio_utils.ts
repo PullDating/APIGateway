@@ -3,6 +3,9 @@ import {MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_END
 const Minio = require('minio'); //for object storage
 const defaultBucket = 'nanortheast';
 const fs = require('fs')
+import { DateTime } from "luxon";
+var crypto = require("crypto");
+
 
 const {PassThrough} = require('stream');
 
@@ -41,7 +44,12 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
         }
 
         console.log(`Sending object ${i}`);
-        const objName = uuid.concat("$", i.toString());
+        //const objName = uuid.concat("$", i.toString());
+        //instead use a hashing algorithm to produce the object name
+        //datetime to string
+        const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
+        //some random characters
+
         
         console.log(`object name: ${objName}`)
         await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
