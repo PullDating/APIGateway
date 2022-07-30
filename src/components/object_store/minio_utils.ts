@@ -71,6 +71,7 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
 }
 
 export async function delete_file_in_minio(minioClient:any, bucketName:string, objectName:string){
+    console.log("got_into_delete_file_in_minio")
     minioClient.removeObject(bucketName, objectName, function(err:Error) {
         if (err) {
           return console.log('Unable to remove object', err)

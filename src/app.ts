@@ -589,36 +589,27 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
         }
 
         //database call to update fields.
+
         async function standard_field_update_callback(imagePath?:Object){
-            if(imagePath){
-                console.log("Final image path: " + JSON.stringify(imagePath));
-                profile!.imagePath = imagePath
-            }
-            if (value['gender']) {
-                profile!.gender = value['gender']
-            }
-            if (value['height']) {
-                profile!.height = value['height']
-            }
-            if (value['datingGoal']) {
-                profile!.datingGoal = value['datingGoal']
-            }
-            if (value['biography']) {
-                profile!.biography = value['biography']
-            }
-            if (value['bodyType']) {
-                profile!.bodyType = value['bodyType']
-            }
-            if (value['longitude'] && value['latitude']) {
-                const long: number = value['longitude']
-                const lat: number = value['latitude']
-                profile!.lastLocation = { type: 'Point', coordinates: [long, lat] }
-            }
-    
-            await profile!.save().then(()=> {
+
+            const updateData:any = {}
+            if(imagePath) updateData['imagePath'] = imagePath; 
+            if(value['gender']) updateData['gender'] = value['gender']
+            if(value['height']) updateData['height'] = value['height']
+            if(value['datingGoal']) updateData['datingGoal'] = value['datingGoal']
+            if(value['biography']) updateData['biography'] = value['biography']
+            if(value['bodyType']) updateData['bodyType'] = value['bodyType']
+            if(value['latitude'] && value['longitude']) updateData['lastLocation'] = { type: 'Point', coordinates: [value['longitude'], value['latitude']] }
+
+            Profile.update(
+                updateData,
+                {
+                    where: {uuid: value['uuid']}
+                }
+            ).then(()=>{
                 res.json({message: "Profile updated"})
                 return
-            });
+            })
         }
 
         const prevImagePath = profile.imagePath;
@@ -630,7 +621,7 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
 
         if(filepaths.length > 0){ //they are trying to add images and reorder the existing ones.
-            
+            console.log("filepaths was greater than 0")
             if(req.body.reorder_photos){ // they want to upload photos and reorder them, and perhaps delete old ones.
 
                 //enure that the first minProfilePhotos number slots are filled.
@@ -733,6 +724,7 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                         console.log("updated image path: \n" + JSON.stringify(newImagePath));
                         //if it's the last one, send the database query to update ImagePath
                         if(i == filepaths.length - 1){
+                            console.log("right before calling final callback: \n" + JSON.stringify(newImagePath))
                             console.log("Done with uploding, time to submit to database")
                             await standard_field_update_callback(newImagePath)
                         }
@@ -742,9 +734,10 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
             }
 
         } else { //they are not adding any new images.
-            
+            console.log("not adding any new photos")
             if(req.body.reorder_photos){ //they are trying to reorder their existing photos, but not add new ones. (could still be deleting)
-                
+                console.log("trying to reorder/delete photos")
+                //console.log("req.body.reorder_photos:" + req.body.reorder_photos)
                 //there should not be any -1 values, becuause that means new image.
                 for(var key of Object.keys(req.body.reorder_photos)){
                     if(req.body.reorder_photos[key] == -1){
@@ -754,14 +747,20 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                 }
 
                 //compare the lengths of the previous count, to the length of the reorder photos to see if they deleted some
-                if(count > req.body.reorder_photos.length){ //they deleted at least a photo as well as rearranging.
+                if(count > Object.keys(req.body.reorder_photos).length){ //they deleted at least a photo as well as rearranging.
+                    console.log("delete a photo and rearrange.")
                     //find the deleted photo(s) and delete them from the minio container
 
                     //we need to figure out which values prevImagePath did not show up in reorder_photos as a value.
                     let seen:boolean[] = new Array(count).fill(false); //which of the prevImagePath locations were used
+                   
                     for(var key of Object.keys(req.body.reorder_photos)){
                         seen[req.body.reorder_photos[key]] = true;
                     }
+
+                    //print out the seen array
+                    console.log("seen:" + seen)
+                    
 
                     let minioClient:any = connect_minio()
                     //now find the ones that weren't used and delete them
@@ -773,8 +772,9 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
                     //then rearrange and callback
                     const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
-                    standard_field_update_callback(newImagePath)
+                    await standard_field_update_callback(newImagePath)
                 } else { //they are simply rearranging their photos
+                    console.log("simply trying to reorder photos")
                     const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
                     standard_field_update_callback(newImagePath)
                 }
