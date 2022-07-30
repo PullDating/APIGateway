@@ -48,10 +48,7 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
         //instead use a hashing algorithm to produce the object name
         //datetime to string
         const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
-        //some random characters
-
-        
-        console.log(`object name: ${objName}`)
+        //console.log(`object name: ${objName}`)
         await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
             console.log("Tried fPutObject...")
             if(err){
@@ -126,3 +123,7 @@ export async function delete_file(filepath:string){
 //scan images for a user to make sure there is nothing funky about them
 
 //compression stuff
+export function get_num_images_from_imagePath(imagePath:Object):number {
+    //subtract one for the bucket
+    return Object.keys(imagePath).length - 1;
+}

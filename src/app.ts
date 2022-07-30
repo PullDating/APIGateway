@@ -21,19 +21,19 @@ import Filter from './models/filter';
 import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
-import { connect_minio, set_user_photos_from_path, get_user_photos, delete_files } from './components/object_store/minio_utils';
+import { connect_minio, set_user_photos_from_path, get_user_photos, delete_files, get_num_images_from_imagePath } from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
-import { any, array } from 'joi';
+import Joi, { any, array } from 'joi';
 import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
 
 import { MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT } from "./config";
 import { Stream, Writable } from 'stream';
 
 
-const Joi = require('joi'); //for schema validation
+//const Joi = require('joi'); //for schema validation
 const Minio = require('minio'); //for object storage
 
 //const os = require('os');
@@ -47,8 +47,7 @@ const multer_profile_photos_upload = multer({ dest: 'uploads/' })//used for phot
 const fs = require('fs') //file system library.
 //const { promisify } = require('util') //utility library. 
 
-const maxProfilePhotos = 6; //the max number of photos that someone is allowed to have in their profile.
-const minProfilePhotos = 3; //the minimum number of photos that someone is allowed to have in their profile.
+
 
 
 export const app = express();
@@ -86,19 +85,35 @@ enum genderOptions {
 }
 */
 
+const maxProfilePhotos = 6; //the max number of photos that someone is allowed to have in their profile.
+const minProfilePhotos = 3; //the minimum number of photos that someone is allowed to have in their profile.
+
+//joi base validators
+const datingGoal_base = Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure')
+const bodyType_base = Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese')
+const gender_base = Joi.string().valid('man', 'woman', 'non-binary')
+
+//the number of these should reflect the min and max profile photos
+//key is the new location, value is the old location. Value of -1 means that it is a new photo
+//then we should be able to interpret from that and what's in the database which were deleted.
+let reorder_photos_base = Joi.object({
+    0 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    1 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    2 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    3 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+    4 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+    5 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+}).optional()
 
 
-const datingGoalOptions:any[] = ['longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure'];
-const bodyTypeOptions:any[] = ['lean', 'average', 'muscular', 'heavy', 'obese'];
-const genderOptions:any[] = ['man', 'woman', 'non-binary'];
-
+// Joi Schemas
 const create_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     name: Joi.string().alphanum().max(50).required(),
     birthDate: Joi.date().required(),
     //gender: Joi.array(Joi.string().valid(genderOptions).required()),
-    gender: Joi.string().valid('man', 'woman', 'non-binary').required(),
+    gender: gender_base.required(),
     height: Joi.number().min(0).max(304.8).required(),
     // imagePath: Joi.object().keys({
     //     "bucket" : Joi.string().required(),
@@ -113,9 +128,9 @@ const create_profile_schema = Joi.object({
     //     8 : Joi.string(),
     //     9 : Joi.string(),
     // }).required(),
-    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').required(),
+    datingGoal: datingGoal_base.required(),
     biography: Joi.string().max(300).required(),
-    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').required(),
+    bodyType: bodyType_base.required(),
     longitude: Joi.number().required(),
     latitude: Joi.number().required(),
 });
@@ -123,25 +138,17 @@ const create_profile_schema = Joi.object({
 const update_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    gender: Joi.string().valid('man', 'woman', 'non-binary').optional(),
-    // imagePath: Joi.object().keys({
-    //     "bucket" : Joi.string().required(),
-    //     0 : Joi.string().required(),
-    //     1 : Joi.string().required(),
-    //     2 : Joi.string().required(),
-    //     3 : Joi.string(),
-    //     4 : Joi.string(),
-    //     5 : Joi.string(),
-    //     6 : Joi.string(),
-    //     7 : Joi.string(),
-    //     8 : Joi.string(),
-    //     9 : Joi.string(),
-    // }).optional(),
-    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').optional(),
+    gender: gender_base.optional(),
+    datingGoal: datingGoal_base.optional(),
     biography: Joi.string().max(300).optional(),
-    bodyType: Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese').optional(),
+    bodyType: bodyType_base.optional(),
     longitude: Joi.number().optional(),
     latitude: Joi.number().optional(),
+    //the key is the index the photo should show up in the profile
+    //the value is the previous index
+    //if the photo doesn't move then the key and value will be the same
+    //if the photo didn't exist previously, then the value will be -1
+    reorder_photos: reorder_photos_base
 });
 
 const simple_get_schema = Joi.object({
@@ -155,7 +162,7 @@ const swipe_schema = Joi.object({
     uuid: Joi.string().guid().required(),
     target_uuid: Joi.string().guid().required(),
     type: Joi.number().valid(0, 1, 3, 4).required(),
-    datingGoal: Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure').required()
+    datingGoal: datingGoal_base.required()
 });
 
 const create_filter_schema = Joi.object({
@@ -339,19 +346,7 @@ Inputs:
 - latitude: float
 - longitude: float
 
-need to add a few more things:
-reorder_photos: {
-    "previous order location" : "new order location"
-    ...
-    ...
-}
-//ensure that the total number of photos does not exceed the total.
-add_photos: {
-    "index in filepaths" : "new order location"
-}
-delete_photos: {
-    "old order location" : 
-}
+
 
 
 Outputs:
@@ -496,6 +491,21 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         });
 });
 
+// need to add a few more things to save on image uploading:
+// reorder_photos: {
+//     "previous order location" : "new order location"
+//     ...
+//     ...
+// }
+// //ensure that the total number of photos does not exceed the total.
+// add_photos: {
+//     "index in filepaths" : "new order location"
+// }
+// delete_photos: {
+//     "old order location" : 
+// }
+// may have to delete even if they are not in this list (eg they went over the limit.)
+
 //to update an existing profile within the application.
 app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
 
@@ -503,6 +513,18 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
     var filepaths = (req.files as Array<Express.Multer.File>).map(function (file: any) {
         return file.path;
     });
+
+    console.log(req.body.reorder_photos)
+
+    if(req.body.reorder_photos){
+        //convert it from string to json object.
+        const value:Object = JSON.parse(req.body.reorder_photos)
+        //console.log(value);
+        req.body.reorder_photos = JSON.parse(req.body.reorder_photos)
+    }
+
+    //console.log(req.body.reorder_photos);
+    //console.log("zeroth element: " + req.body.reorder_photos['0'])
 
     if (req.headers.authorization == null) {
         res.json({ error: "Authentication token was not supplied." });
@@ -571,11 +593,28 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
             });
         }
 
-        if(filepaths.length > 0){ //they are trying to update their images.
+        if(filepaths.length > 0 && req.body.reorder_photos){ //they are trying to add images and reorder the existing ones.
             //update the images and call callback
 
-        }else{ //they are simply trying to update their normal fields. 
+            
+            //first figure out which ones (if any) are going to be deleted 
+
+            const prevImagePath = req.body.imagePath;
+            //get the number of keys, not including bucket, as number of current photos
+            const count:number = get_num_images_from_imagePath(prevImagePath);
+            //now check that each key from zero to count - 1 is present in the 
+
+        } else if (req.body.reorder_photos && (filepaths.length == 0 || !filepaths)){ //they are just trying reorder but not add any, might be deleting
+            
+        } else if(filepaths.length > 0 && !req.body.reorder_photos){ // they are just adding new ones to the end, not reordering the old ones.
+            //just upload the new photos in order, and append the keys to the previous image path, and then update postgres with that
+            
+        }
+        else if ((!filepaths || filepaths.length == 0) && !req.body.reorder_photos){ //they are simply trying to update their normal fields. 
             await standard_field_update_callback()
+        } else {
+            console.log("unhandled case... report this")
+            res.json({error: "unhandled case, within profile put ... report this"})
         }
     } else {
         console.log("User profile not found, couldn't update state");
@@ -642,8 +681,7 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
             const bucket: string = profile.imagePath['bucket'];
             console.log(profile.imagePath)
             console.log(`got bucket name: ${bucket}`)
-            let count = Object.keys(profile.imagePath).length; //number of items in the json (images + bucket)
-            count = count - 1
+            const count:number = get_num_images_from_imagePath(profile.imagePath)
             console.log(`got count: ${count}`)
             //subtract one for the bucket key, which is not an image identifier. 
 
