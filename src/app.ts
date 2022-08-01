@@ -330,6 +330,14 @@ app.put('/account/unpause', async (req: Request, res: Response) => {
 })
 // /profile hosts api endpoints to do with managing, creating and deleting user profiles. 
 
+
+app.get('/profile/photoLimits', upload.none(), async (req:Request, res:Response) => {
+    res.json({
+        maxProfilePhotos: maxProfilePhotos,
+        minProfilePhotos: minProfilePhotos
+    })
+})
+
 /*
 - Takes the inputs from the profile creation process within the flutter application and adds the information to the user table within the database.
 Inputs: 
@@ -345,9 +353,6 @@ Inputs:
 - uuid: string
 - latitude: float
 - longitude: float
-
-
-
 
 Outputs:
 - 

@@ -38,18 +38,14 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
     //put objects with the correct name format into the bucket 'uuid$index'
 
     //it is seeing an empty photo array. not sure why....
-    console.log(`length of photos array: ${imagePaths.length}`)
-    for (let i = 0; i < imagePaths.length; i++) { 
+
+    let i:number = 0;
+
+    async function PutObjectCallback() {
         var metaData = {
             hello : "hi"
         }
-
-        console.log(`Sending object ${i}`);
-        //const objName = uuid.concat("$", i.toString());
-        //instead use a hashing algorithm to produce the object name
-        //datetime to string
         const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
-        //console.log(`object name: ${objName}`)
         await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
             console.log("Tried fPutObject...")
             if(err){
@@ -62,12 +58,48 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
                     console.log("Trying to call the callback!")
                     console.log(returnObject)
                     callback(req, returnObject);
+                } else {
+                    i++;
+                    PutObjectCallback();
                 }
             })
-            
+        
         });
     }
+
+    await PutObjectCallback()
     return returnObject;
+
+    // console.log(`length of photos array: ${imagePaths.length}`)
+    // for (let i = 0; i < imagePaths.length; i++) { 
+    //     var metaData = {
+    //         hello : "hi"
+    //     }
+
+    //     console.log(`Sending object ${i}`);
+    //     //const objName = uuid.concat("$", i.toString());
+    //     //instead use a hashing algorithm to produce the object name
+    //     //datetime to string
+    //     const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
+    //     //console.log(`object name: ${objName}`)
+    //     await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
+    //         console.log("Tried fPutObject...")
+    //         if(err){
+    //             return console.log(err)
+    //         }
+    //         returnObject = Object.assign(returnObject, {[i.toString()] : `${objName}`})
+    //         console.log("Success", objInfo.etag,objInfo.versionId)
+    //         await delete_file(imagePaths[i]).then(() =>{
+    //             if(i==imagePaths.length-1){
+    //                 console.log("Trying to call the callback!")
+    //                 console.log(returnObject)
+    //                 callback(req, returnObject);
+    //             }
+    //         })
+            
+    //     });
+    // }
+    
 }
 
 export async function delete_file_in_minio(minioClient:any, bucketName:string, objectName:string){
