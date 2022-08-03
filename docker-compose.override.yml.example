@@ -1,0 +1,30 @@
+version: "3.9"
+
+x-environment: &environment
+    environment:
+      SERVICE_PORT: 3000
+      # Database connection
+      DB_USER: 'postgres'
+      DB_URL: 'postgres'
+      DB_NAME: 'postgres'
+      DB_PASSWORD: 'postgres'
+      DB_ROOT_PASSWORD: 'postgres'
+      DB_PORT: 5432
+      POSTGRES_PASSWORD: 'postgres'
+services: 
+  api: 
+    ports:
+      - 3000:3000
+    volumes: 
+    - .:/usr/src/app
+    <<: *environment
+
+  postgres: 
+    ports: 
+      - "5432:5432"
+    volumes: 
+      - data:/var/lib/postgresql/data
+    <<: *environment
+
+volumes:
+  data: {}

@@ -1,4 +1,4 @@
 node_modules
-.env
+docker-compose.override.yml
 src/config/.env.development
 config.ts
