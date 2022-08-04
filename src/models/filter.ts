@@ -17,7 +17,7 @@ import {
 import { Json } from 'sequelize/types/utils';
 import { DateTime } from 'luxon';
 
-@Table({ timestamps: true })
+@Table({ timestamps: true})
 export default class Filter extends Model{
     @PrimaryKey
     @AllowNull(false)
