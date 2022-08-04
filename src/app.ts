@@ -46,6 +46,7 @@ let sequelize:Sequelize;
 
 
 import * as http from 'http';
+//websocket
 import * as WebSocket from 'ws';
 const server = http.createServer(app);
 const wss = new WebSocket.Server({server});
