@@ -4,11 +4,16 @@ import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
 import router from './router';
-import * as dotenv from 'dotenv';
+
+import {SERVICE_PORT} from "./config/vars";
+
+
+
+//import * as dotenv from 'dotenv';
 //import { SERVICE_PORT } from 'env';
 import { Request, Response, Router } from 'express';
 
-const SERVICE_PORT = process.env['SERVICE_PORT'];
+//const SERVICE_PORT = process.env['SERVICE_PORT'];
 
 //sequelize models.
 import Account from './models/account';
@@ -26,6 +31,7 @@ import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 import { any } from 'joi';
 import { collapseTextChangeRangesAcrossMultipleVersions, isConstructorDeclaration } from 'typescript';
+import { Server } from 'http';
 const Joi = require('joi');
 
 export const app = express();
@@ -37,6 +43,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/', router);
 
 let sequelize:Sequelize;
+
+
+import * as http from 'http';
+import * as WebSocket from 'ws';
+const server = http.createServer(app);
+const wss = new WebSocket.Server({server});
+wss.on('connection', (ws: WebSocket) => {
+    ws.on('message', (message:string) => {
+        console.log("message received: %s", message);
+        ws.send(`Hello, you send -> ${message}`);
+    });
+
+    ws.send(`Hi there, I am a websocket server`);
+})
 
 //joi schemas
 
@@ -939,10 +959,16 @@ app.get('/test/2', async (req:Request,res:Response)=> {
     */
 })
 
-
-
 dbInitialize().then((sequelizeReturn) => {
     sequelize = sequelizeReturn;
-    app.listen(SERVICE_PORT);
-    console.log(`listening on port ${SERVICE_PORT!.toString()}`);
+    
+    server.listen(SERVICE_PORT, () => {
+        if(process.send) {
+            process.send(`Server running at http://localhost:${SERVICE_PORT}\n\n`);
+        }
+        console.log(`Server running at http://localhost:${SERVICE_PORT}\n\n`)
+    });
+
+    //console.log(`listening on port ${SERVICE_PORT!.toString()}`);
 });
+

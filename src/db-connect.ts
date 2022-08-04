@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
-import { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } from "./config/vars";
+import { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } from "./config";
 import * as path from 'path';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
