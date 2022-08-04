@@ -45,6 +45,9 @@ app.use('/', router);
 let sequelize:Sequelize;
 
 
+//websocket tutorial
+// https://medium.com/factory-mind/websocket-node-js-express-step-by-step-using-typescript-725114ad5fe4
+
 import * as http from 'http';
 //websocket
 import * as WebSocket from 'ws';
@@ -52,8 +55,27 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({server});
 wss.on('connection', (ws: WebSocket) => {
     ws.on('message', (message:string) => {
+
+        const broadcastRegex = /^broadcast\:/;
+
+        console.log(`clients: ${wss.clients.size}`)
+
+        if(message = "broadcast"){
+            //message = message.replace(broadcastRegex, '');
+
+            wss.clients.forEach(client => {
+                if(client != ws){
+                    client.send(`Hello, broadcast message -> ${message}`);
+                }
+            })
+        } else {
+            ws.send(`Hello, you sent -> ${message}`);
+        }
+
         console.log("message received: %s", message);
-        ws.send(`Hello, you send -> ${message}`);
+        //ws.send(`Hello, you send -> ${message}`);
+
+
     });
 
     ws.send(`Hi there, I am a websocket server`);
