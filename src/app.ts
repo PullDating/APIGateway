@@ -66,6 +66,7 @@ var rooms: any = {};
     "message":"anything",
     "roomID":"the room to create or join",
     "clientID":"The uuid of the client."
+    "token" : "The authentication token of the user"
 }
 */
 
@@ -369,9 +370,9 @@ const available_room = (ws: any) => {
     }
 }
 
-wss.on('connection', function connection(ws: any) {
+wss.on('connection', async function connection(ws: any){
     try {
-        ws.on('message', (recieveData: any) => {
+        ws.on('message', async (recieveData: any) => {
             console.log(recieveData);
             var data = JSON.parse(recieveData);
             console.log(data)
@@ -383,7 +384,37 @@ wss.on('connection', function connection(ws: any) {
                 }));
                 return;
             }
-            var { roomID, meta } = data;
+            var { roomID, meta, message, clientID, token } = data;
+
+            //authentication
+
+            let result: number = -1;
+            try {
+                result = await validate_auth(clientID, token);
+            } catch (err: any) {
+                console.error(err.stack);
+                ws.send(JSON.stringify({
+                    'message': 'server error',
+                    'status': 0
+                }));
+                //TODO leave the room if they are in it.
+                //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
+                ws.terminate();
+                return;
+            }
+            //if invalid, return without completing. 
+            if (result != 0) {
+
+                ws.send(JSON.stringify({
+                    'message': 'Authentication Parameters were invalid.',
+                    'status': 0
+                }));
+                //TODO leave the room if they are in it.
+                //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
+                ws.terminate();
+                return
+            }
+
             switch (meta) {
                 case "join_or_create_room":
                     joinOrCreateRoom(data, ws);
