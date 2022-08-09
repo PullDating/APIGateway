@@ -185,8 +185,8 @@ const joinOrCreateRoom = (data: any, ws: any) => {
             var users:any = {}
             users[clientID] = ws;
             obj["users"] = users;
-            obj["log"] = {} 
-            console.log('creating room with the follwing object:')
+            obj["log"] = []
+            console.log('creating room with the following object:')
             console.log(obj);
             rooms[roomID] = obj;
             ws['roomID'] = roomID;
@@ -259,6 +259,25 @@ const sendMessage = (data: any, ws: any, Status = null) => {
         console.log("object: ");
         console.log(obj);
 
+        //add the message to the log
+        /*
+        the log will be a list of objects where each object has this format
+        {
+            "message" : "the text of the message of whatever."
+            "timestamp" : "the time the message was sent"
+            "sender" : "uuid of the sender", 
+            "read" : "true or false"
+        }
+        */
+
+        let logmessage:Object = {
+            "message" : message,
+            "timestamp" : Date.now(),
+            "sender" : clientID,
+            "read" : false
+        }
+        rooms[roomID].log.push(logmessage);
+        console.log(rooms[roomID].log);
 
         //loop through the entries that are not the user themselves
         for(var user in obj){
@@ -287,6 +306,7 @@ const sendMessage = (data: any, ws: any, Status = null) => {
 
 
     } catch (error) {
+        console.log(error)
         ws.send(JSON.stringify({
             'message': 'There was some problem in sending message',
             'status': 0
