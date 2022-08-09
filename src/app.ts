@@ -8,7 +8,7 @@ import router from './router';
 import { SERVICE_PORT } from "./config/vars";
 
 
-
+let maxConcurrentMatches:number = 3;
 
 //import * as dotenv from 'dotenv';
 //import { SERVICE_PORT } from 'env';
@@ -65,7 +65,7 @@ var rooms: any = {};
     "meta":"join_or_create_room"/"send_message",
     "message":"anything",
     "roomID":"the room to create or join",
-    "clientID":"The uuid of the client."
+    "clientID":"The uuid of the client.",
     "token" : "The authentication token of the user"
 }
 */
@@ -105,111 +105,90 @@ const insideRoomdataExist = (arr: any, data: any) => {
 }
 
 const clientExistInRoom = (roomID: any, ws: any, clientID: any) => {
+    console.log("checking to see if the user is in the room.")
     var status = false;
-    const data: any = rooms[roomID];
-    for (var i = 0; i < data.length; i++) {
-        var temp = data[i];
-        // if(roomID in temp){
-        //   status=true;
-        //   console.log("hello world");
-        // }
-        for (const obj in temp) {
-            // if(ws == temp[obj]){
-            if (clientID == obj) {
-                status = true;
-                break;
-            }
-        }
+    const data: any = rooms[roomID].users;
+    console.log(`these are the users ${data}`)
+
+    if(data.hasOwnProperty(clientID)){
+        status = true;
     }
+
+    // for (const obj in data) {
+
+    //     //check each key to see if it matches clientId
+        
+
+    //     // var temp = data[i];
+    //     // // if(roomID in temp){
+    //     // //   status=true;
+    //     // //   console.log("hello world");
+    //     // // }
+    //     // for (const obj in temp) {
+    //     //     // if(ws == temp[obj]){
+    //     //     if (clientID == obj) {
+    //     //         status = true;
+    //     //         break;
+    //     //     }
+    //     // }
+    // }
     return status;
 }
-// create room
-const createRoom = (data: any, ws: any) => {
-    try {
-        var { roomID, clientID } = data;
-        const status = roomExist(roomID);
-        if (status) {
-            ws.send(JSON.stringify({
-                'message': 'room already exist',
-                'status': 0
-            }));
-        } else {
-            rooms[roomID] = [];
-            //var obj = {};
-            let obj = [];
-            obj[clientID] = ws;
-            rooms[roomID].push(obj);
-            ws['roomID'] = roomID;
-            ws['clientID'] = clientID;
-            ws['admin'] = true;
-            ws.send(JSON.stringify({
-                'message': 'room created succesfully',
-                'status': 1
-            }));
-        }
-    } catch (error) {
-        ws.send(JSON.stringify({
-            'message': 'there was some problem in creating a room',
-            'status': 0
-        }));
-    }
+
+function getLog(uuid:String, target_uuid:String){
+    //get the log from the database
+
 }
 
-// join room 
-const joinRoom = (data: any, ws: any) => {
-    try {
-        var { roomID, clientID } = data;
-        // check if room exist or not
-        const roomExist = roomID in rooms;
-        if (!roomExist) {
-            ws.send(JSON.stringify({
-                'message': 'Check room id',
-                'status': 0
-            }));
-            return;
-        }
-        // const inRoom = insideRoomdataExist(rooms[roomID],clientID);
-        const inRoom = clientExistInRoom(roomID, ws, clientID)
-        if (inRoom) {
-            ws.send(JSON.stringify({
-                "message": "you are already in a room",
-                "status": 0
-            }));
-        } else {
-            //var obj = {};
-            let obj = [];
-            obj[clientID] = ws;
-            rooms[roomID].push(obj);
-            ws['roomID'] = roomID
-            ws['clientID'] = clientID;
-            ws.send(JSON.stringify({
-                "message": "Joined succesfully",
-                "status": 1
-            }));
-        }
-    } catch (error) {
-        ws.send(JSON.stringify({
-            'message': 'there was some problem in joining a room',
-            'status': 0
-        }));
-    }
+function appendLog(log:Object){
+    let newlog:Object = {}
+
+    //get the existing log from the database
+
+    //append the two together
+
+    //write the new log to the database
+
+    setLog(newlog);
+
+}
+
+function setLog(log:Object){
+
+
+}
+
+//get log if it exists in the database, and broadcast that message to the people in the room
+function getLogIfExists(uuid: String, target_uuid: String): Object{
+    let chatlog:Object = {}
+    //poll the database to get the chat log of this chat.
+
+    // form a json object.
+
+    return chatlog;
 }
 
 const joinOrCreateRoom = (data: any, ws: any) => {
+    console.log("someone tried to make a room")
     try {
         var { roomID, clientID } = data;
 
         // check if room exist or not
         const roomExist = roomID in rooms;
         if (!roomExist) { //no room exists
-
+            console.log(`the room ${roomID} doesn't exist`);
             //create room.
 
-            rooms[roomID] = [];
-            //var obj = {};
-            let obj = [];
-            obj[clientID] = ws;
-            rooms[roomID].push(obj);
+            rooms[roomID] = {};
+            var obj:any = {};
+            //let obj = [];
+            var users:any = {}
+            users[clientID] = ws;
+            obj["users"] = users;
+            obj["log"] = {} 
+            console.log('creating room with the follwing object:')
+            console.log(obj);
+            rooms[roomID] = obj;
             ws['roomID'] = roomID;
             ws['clientID'] = clientID;
             ws['admin'] = true;
@@ -220,7 +199,7 @@ const joinOrCreateRoom = (data: any, ws: any) => {
             console.log("no room exists under that name");
             return;
         } else { // a room exists. 
-
+            console.log(`the room ${roomID} exists already`);
             //join room
 
             const inRoom = clientExistInRoom(roomID, ws, clientID)
@@ -230,13 +209,13 @@ const joinOrCreateRoom = (data: any, ws: any) => {
                     "status": 0
                 }));
             } else {
-
+                console.log("Attempting to join the room that was requested...");
                 //join the room that you requested.
+                //append to the users field of the rooms object.
+                console.log(rooms[roomID].users);
+                rooms[roomID].users[clientID] = ws;
 
-                //var obj = {};
-                let obj = [];
-                obj[clientID] = ws;
-                rooms[roomID].push(obj);
+                console.log(rooms[roomID])
                 ws['roomID'] = roomID
                 ws['clientID'] = clientID;
                 ws.send(JSON.stringify({
@@ -246,6 +225,7 @@ const joinOrCreateRoom = (data: any, ws: any) => {
             }
         }
     } catch (error) {
+        console.log(error);
         ws.send(JSON.stringify({
             'message': 'there was some problem joining or creating a room',
             'status': 0
@@ -275,19 +255,37 @@ const sendMessage = (data: any, ws: any, Status = null) => {
             }));
             return;
         }
-        const obj = rooms[roomID];
-        for (let i = 0; i < obj.length; i++) {
-            var temp = obj[i];
-            for (var innerObject in temp) {
-                var wsClientID = temp[innerObject];
-                if (ws !== wsClientID) {
-                    wsClientID.send(JSON.stringify({
-                        'message': message,
-                        'status': Status ? Status : 1
-                    }));
-                }
+        const obj = rooms[roomID].users;
+        console.log("object: ");
+        console.log(obj);
+
+
+        //loop through the entries that are not the user themselves
+        for(var user in obj){
+            if(obj[user] !== ws){
+                obj[user].send(JSON.stringify({
+                    'message': message,
+                    'status': Status ? Status : 1
+                }));
             }
         }
+
+
+        // for (let i = 0; i < obj.length; i++) {
+        //     var temp = obj[i];
+        //     for (var innerObject in temp) {
+        //         var wsClientID = temp[innerObject];
+        //         if (ws !== wsClientID) {
+        //             wsClientID.send(JSON.stringify({
+        //                 'message': message,
+        //                 'status': Status ? Status : 1
+        //             }));
+        //         }
+        //     }
+        // }
+
+
+
     } catch (error) {
         ws.send(JSON.stringify({
             'message': 'There was some problem in sending message',
@@ -298,7 +296,6 @@ const sendMessage = (data: any, ws: any, Status = null) => {
 
 const leaveRoom = (ws: any, data: any) => {
     //TODO add the database call to save the log. 
-
     try {
         const { roomID } = data;
         // manual code started------------------------------------------------------------
@@ -319,7 +316,7 @@ const leaveRoom = (ws: any, data: any) => {
         }
         else {
             // find the index of object
-            let lst_obj = rooms[roomID];
+            let lst_obj = rooms[roomID].users;
             var index = null;
             for (let i = 0; i < lst_obj.length; i++) {
                 var temp_obj = lst_obj[i];
@@ -337,7 +334,7 @@ const leaveRoom = (ws: any, data: any) => {
                 }
             }
             if (index != null) {
-                rooms[roomID].splice(index, 1);
+                rooms[roomID].users.splice(index, 1);
                 console.log((rooms[roomID].length));
             }
         }
@@ -452,6 +449,7 @@ wss.on('connection', async function connection(ws: any){
         })
 
         ws.on('close', function (data: any) {
+            console.log("connection close request.")
             leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
             ws.terminate();
         });
@@ -618,6 +616,12 @@ Outputs: none
 app.get('/', (request: Request, responsed: Response) => {
     response.redirect('https://pulldating.tips');
 });
+
+//global section is for returning state variables and updates for the application
+app.get('/global/concurrent-match-limit', (request: Request, response: Response) => {
+    response.json({"limit":maxConcurrentMatches});
+});
+
 
 /*
 - This function is called when there is no present uuid and/or token cached on the user

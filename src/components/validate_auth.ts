@@ -21,7 +21,7 @@ export default async function validate_auth(uuid:string,token:string) : Promise<
 
         //check if the entry doesn't exist, or doesn't match the uuid.
         if(search.length == 0 || search[0].uuid != uuid){
-            //console.log("Either the entry did not exist, or the auth token was invalid.");
+            console.log("Either the entry did not exist, or the auth token was invalid.");
             return -1;
         }
 
@@ -31,7 +31,7 @@ export default async function validate_auth(uuid:string,token:string) : Promise<
 
         //check if the token has expired.
         if(expireTime < currentTime){
-            //console.log("The authentication token has expired");
+            console.log("The authentication token has expired");
             return -1;
         }
         //console.log("authentication successful");
