@@ -24,7 +24,7 @@ import Swipe from './models/swipe';
 import Filter from './models/filter';
 
 import { DoubleDataType, FloatDataType, GeographyDataType, Sequelize, UUID, UUIDV4 } from 'sequelize/types';
-import { BeforeValidate, DataType } from 'sequelize-typescript';
+import { BeforeValidate, DataType, Length } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 
 import { DateTime } from "luxon";
@@ -233,6 +233,22 @@ const joinOrCreateRoom = (data: any, ws: any) => {
     }
 }
 
+
+//updates the most recent log message by the other person to read 
+function setReadRecent(roomID:any, clientID:String){
+    //start at most recent and work backwards
+    
+    for(let i = rooms[roomID].log.length - 1  ; i>=0; i-- ){
+        
+        if(rooms[roomID].log[i].sender != clientID){
+            rooms[roomID].log[i].read = true;
+            break;
+        }
+        
+    }
+}
+
+
 // send message 
 const sendMessage = (data: any, ws: any, Status = null) => {
     try {
@@ -266,7 +282,7 @@ const sendMessage = (data: any, ws: any, Status = null) => {
             "message" : "the text of the message of whatever."
             "timestamp" : "the time the message was sent"
             "sender" : "uuid of the sender", 
-            "read" : "true or false"
+            "read" : "true or false" (only check the most recent one sent by the other.)
         }
         */
 
@@ -282,6 +298,8 @@ const sendMessage = (data: any, ws: any, Status = null) => {
         //loop through the entries that are not the user themselves
         for(var user in obj){
             if(obj[user] !== ws){
+                //if it is a synchronous conversation, set the most recent to read
+                setReadRecent(roomID,clientID);
                 obj[user].send(JSON.stringify({
                     'message': message,
                     'status': Status ? Status : 1
@@ -317,7 +335,7 @@ const sendMessage = (data: any, ws: any, Status = null) => {
 const leaveRoom = (ws: any, data: any) => {
     //TODO add the database call to save the log. 
     try {
-        const { roomID } = data;
+        const { roomID, clientID} = data;
         // manual code started------------------------------------------------------------
         const roomExist = roomID in rooms;
         if (!roomExist) {
@@ -327,37 +345,53 @@ const leaveRoom = (ws: any, data: any) => {
             }));
             return;
         }
-        if ('admin' in ws) {
-            data['message'] = "Admin left the room.";
-            //sendMessage(data,ws,Status = 2);
-            sendMessage(data, ws);
-            delete rooms[ws.roomID]
-            return;
-        }
-        else {
+
+        //remove the user from the rooms entry
+        delete rooms[roomID].users[clientID];  
+        console.log(rooms[roomID].users);
+
+        //check if the entry is null, and if so then save to the database
+
+
+
+        // if ('admin' in ws) {
+        //     data['message'] = "Admin left the room.";
+        //     //sendMessage(data,ws,Status = 2);
+        //     sendMessage(data, ws);
+        //     delete rooms[ws.roomID]
+        //     return;
+        // }
+        // else {
             // find the index of object
-            let lst_obj = rooms[roomID].users;
-            var index = null;
-            for (let i = 0; i < lst_obj.length; i++) {
-                var temp_obj = lst_obj[i];
-                for (var key in temp_obj) {
-                    var temp_inside = temp_obj[key]
-                    if ('admin' in temp_inside) {
-                        temp_inside.send(JSON.stringify({
-                            'message': 'Somebody leave the room',
-                            'status': 3
-                        }));
-                    }
-                    if (ws == temp_inside) {
-                        index = i;
-                    }
-                }
-            }
-            if (index != null) {
-                rooms[roomID].users.splice(index, 1);
-                console.log((rooms[roomID].length));
-            }
-        }
+            //let lst_obj = rooms[roomID].users;
+            //var index = null;
+
+
+
+
+
+            // for (let i = 0; i < lst_obj.length; i++) {
+            //     var temp_obj = lst_obj[i];
+            //     for (var key in temp_obj) {
+            //         var temp_inside = temp_obj[key]
+            //         if ('admin' in temp_inside) {
+            //             temp_inside.send(JSON.stringify({
+            //                 'message': 'Somebody leave the room',
+            //                 'status': 3
+            //             }));
+            //         }
+            //         if (ws == temp_inside) {
+            //             index = i;
+            //         }
+            //     }
+            // }
+
+
+            // if (index != null) {
+            //     rooms[roomID].users.splice(index, 1);
+            //     console.log((rooms[roomID].length));
+            // }
+        // }
 
 
     } catch (error) {
