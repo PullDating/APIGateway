@@ -6,6 +6,7 @@ import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
+import Chat from './models/chat';
 
 export async function dbInitialize():Promise<Sequelize> {
     console.log("Attempting to initialize the database");
@@ -26,7 +27,7 @@ export async function dbInitialize():Promise<Sequelize> {
         dialect: 'postgres'
     });
 
-    sequelize.addModels([Account,Auth_Token,Profile,Swipe,Filter]);
+    sequelize.addModels([Account,Auth_Token,Profile,Swipe,Filter,Chat]);
 
     console.log("created sequelize object");
     try {

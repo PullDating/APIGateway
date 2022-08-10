@@ -22,6 +22,7 @@ import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
+import Chat from './models/chat';
 
 import { DoubleDataType, FloatDataType, GeographyDataType, Sequelize, UUID, UUIDV4 } from 'sequelize/types';
 import { BeforeValidate, DataType, Length } from 'sequelize-typescript';
@@ -168,7 +169,7 @@ function getLogIfExists(uuid: String, target_uuid: String): Object{
     return chatlog;
 }
 
-const joinOrCreateRoom = (data: any, ws: any) => {
+const joinOrCreateRoom = async (data: any, ws: any) => {
     console.log("someone tried to make a room")
     try {
         var { roomID, clientID } = data;
@@ -186,17 +187,41 @@ const joinOrCreateRoom = (data: any, ws: any) => {
             users[clientID] = ws;
             obj["users"] = users;
             obj["log"] = []
-            console.log('creating room with the following object:')
-            console.log(obj);
-            rooms[roomID] = obj;
-            ws['roomID'] = roomID;
-            ws['clientID'] = clientID;
-            ws['admin'] = true;
+            
+            //ws['admin'] = true;
             ws.send(JSON.stringify({
                 'message': 'room created succesfully',
                 'status': 1
             }));
             console.log("no room exists under that name");
+
+            //check to see if a database entry exists, and if so populate the room's chats
+            const chat = await Chat.findOne(
+                {
+                    where: 
+                    { 
+                        room_id: roomID
+                    } 
+                }
+            );
+            if(chat){
+                obj["log"] = chat.log;
+            }else{
+                //create a database entry in the chats table with empty json.
+                console.log("adding a new entry to the chat table")
+                Chat.create({
+                    room_id: roomID, 
+                    log: []
+                })
+            }
+
+            console.log('creating room with the following object:')
+            console.log(obj);
+
+            rooms[roomID] = obj;
+            ws['roomID'] = roomID;
+            ws['clientID'] = clientID;
+        
             return;
         } else { // a room exists. 
             console.log(`the room ${roomID} exists already`);
