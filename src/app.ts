@@ -64,8 +64,8 @@ var rooms: any = {};
 {
     "meta":"join_or_create_room"/"send_message",
     "message":"anything",
-    "roomID":"the room to create or join",
     "clientID":"The uuid of the client.",
+    "targetID" : "The uuid of the person they want to talk to."
     "token" : "The authentication token of the user"
 }
 */
@@ -74,7 +74,7 @@ function noop() { };
 
 const paramsExist = (data: any) => {
     try {
-        if ('meta' in data && 'roomID' in data && 'clientID' in data && 'message' in data) {
+        if ('meta' in data && 'targetID' in data && 'clientID' in data && 'message' in data && 'token' in data) {
             return true;
         } else {
             return false;
@@ -435,7 +435,23 @@ wss.on('connection', async function connection(ws: any){
                 }));
                 return;
             }
-            var { roomID, meta, message, clientID, token } = data;
+            
+            var { targetID, meta, message, clientID, token } = data;
+
+            //create the room id from the targetID and the clientID
+            console.log(targetID)
+            console.log
+            let roomID:String;
+            if(targetID < clientID){
+                roomID = targetID + "$" + clientID
+            }else{
+                roomID = clientID + "$" + targetID
+            }
+            console.log(roomID);
+            
+
+            data = {roomID, meta, message, clientID, token}
+
 
             //authentication
 
@@ -465,6 +481,11 @@ wss.on('connection', async function connection(ws: any){
                 ws.terminate();
                 return
             }
+
+            //now check to make sure that they are trying to access a valid match. 
+            
+            
+
 
             switch (meta) {
                 case "join_or_create_room":
