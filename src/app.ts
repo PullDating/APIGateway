@@ -484,14 +484,36 @@ wss.on('connection', async function connection(ws: any){
 
             //now check to make sure that they are trying to access a valid match. 
             
+            //need to check the swipe table for when type = 2
             
 
-
+        
             switch (meta) {
                 case "join_or_create_room":
-                    joinOrCreateRoom(data, ws);
-                    console.log(rooms)
-                    break;
+
+                    const match = await Swipe.findOne(
+                        {
+                            where: 
+                            { 
+                                uuid: clientID,
+                                target_uuid: targetID,
+                                type: 3
+                            } 
+                        }
+                    );
+                    if(match){
+                        joinOrCreateRoom(data, ws);
+                        console.log(rooms)
+                        break;
+                    } else {
+                        ws.send(JSON.stringify({
+                            "message": "No match exists between these people",
+                            "status": 0
+                        }));
+                        ws.terminate();
+                        break;
+                    }
+                    
 
 
                 // case "create_room":
