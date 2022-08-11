@@ -49,6 +49,7 @@ export default class Profile extends Model{
     height!: number;
 
     //this points to the image paths within the Minio image store.
+    //will contain the bucket name, and then the image paths, with the key being the order index.
     @AllowNull(false)
     @Column(DataType.JSONB)
     imagePath!: any;

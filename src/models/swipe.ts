@@ -41,6 +41,10 @@ export default class Swipe extends Model{
     @Column(DataType.INTEGER)
     type!: number;
 
+    @AllowNull(false)
+    @Column(DataType.STRING)
+    datingGoal!: string
+
     @CreatedAt
     creation_date!: Date;
 
