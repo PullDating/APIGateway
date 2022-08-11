@@ -1,15 +1,21 @@
 import express, { response } from 'express';
-import helmet from 'helmet';
+import helmet, { permittedCrossDomainPolicies } from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
 import router from './router';
-import { SERVICE_PORT } from './config';
+
+import { SERVICE_PORT } from "./config/vars";
+
+
+let maxConcurrentMatches:number = 3;
+
+//import * as dotenv from 'dotenv';
+//import { SERVICE_PORT } from 'env';
 import { Request, Response, Router } from 'express';
 
-
-
 const { passThrough } = require('stream');
+//const SERVICE_PORT = process.env['SERVICE_PORT'];
 
 //sequelize models.
 import Account from './models/account';
@@ -17,17 +23,19 @@ import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
+import Chat from './models/chat';
 
-import { DoubleDataType, FloatDataType, GeographyDataType, UUID, UUIDV4 } from 'sequelize/types';
-import { BeforeValidate, DataType } from 'sequelize-typescript';
+import { DoubleDataType, FloatDataType, GeographyDataType, Sequelize, UUID, UUIDV4 } from 'sequelize/types';
+import { BeforeValidate, DataType, Length } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 import upload_photo, {connect_minio, set_user_photos_from_path, get_user_photos, delete_files, get_num_images_from_imagePath, delete_file_in_minio } from './components/object_store/minio_utils';
 
 import { DateTime } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
+
 import Joi, { any, array } from 'joi';
-import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript';
+import { collapseTextChangeRangesAcrossMultipleVersions, isConstructorDeclaration } from 'typescript';
 
 import { MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_USE_SSL, MINIO_PORT, MINIO_ENDPOINT } from "./config";
 import { Stream, Writable } from 'stream';
@@ -47,8 +55,7 @@ const multer_profile_photos_upload = multer({ dest: 'uploads/' })//used for phot
 const fs = require('fs') //file system library.
 //const { promisify } = require('util') //utility library. 
 
-
-
+import { Server } from 'http';
 
 export const app = express();
 app.use(helmet());
@@ -57,6 +64,583 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/', router);
+
+
+//https://stackoverflow.com/questions/62370962/how-to-create-join-chat-room-using-ws-websocket-package-in-node-js
+
+//import {wss} from './components/websockets/chat-utils'
+import { WebSocketServer } from 'ws';
+import * as http from 'http';
+import { receiveMessageOnPort } from 'worker_threads';
+const server = http.createServer(app);
+export const wss = new WebSocketServer({ server })
+
+
+let sequelize: Sequelize;
+
+
+var rooms: any = {};
+
+//inputs for the following functionality
+/*
+{
+    "meta":"join_or_create_room"/"send_message",
+    "message":"anything",
+    "clientID":"The uuid of the client.",
+    "targetID" : "The uuid of the person they want to talk to."
+    "token" : "The authentication token of the user"
+}
+*/
+
+function noop() { };
+
+const paramsExist = (data: any) => {
+    try {
+        if ('meta' in data && 'targetID' in data && 'clientID' in data && 'message' in data && 'token' in data) {
+            return true;
+        } else {
+            return false;
+        }
+    } catch (error) {
+        return false;
+    }
+}
+
+const roomExist = (roomID: string) => {
+    // check for room is already exist or not
+    if (roomID in rooms) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+const insideRoomdataExist = (arr: any, data: any) => {
+    var status = false;
+    for (var i = 0; i < arr.length; i++) {
+        if (data in arr[i]) {
+            status = true;
+            break;
+        }
+    }
+    return status;
+}
+
+const clientExistInRoom = (roomID: any, ws: any, clientID: any) => {
+    console.log("checking to see if the user is in the room.")
+    var status = false;
+    const data: any = rooms[roomID].users;
+    console.log(`these are the users ${data}`)
+
+    if(data.hasOwnProperty(clientID)){
+        status = true;
+    }
+
+    // for (const obj in data) {
+
+    //     //check each key to see if it matches clientId
+        
+
+    //     // var temp = data[i];
+    //     // // if(roomID in temp){
+    //     // //   status=true;
+    //     // //   console.log("hello world");
+    //     // // }
+    //     // for (const obj in temp) {
+    //     //     // if(ws == temp[obj]){
+    //     //     if (clientID == obj) {
+    //     //         status = true;
+    //     //         break;
+    //     //     }
+    //     // }
+    // }
+    return status;
+}
+
+function getLog(uuid:String, target_uuid:String){
+    //get the log from the database
+
+}
+
+function appendLog(log:Object){
+    let newlog:Object = {}
+
+    //get the existing log from the database
+
+    //append the two together
+
+    //write the new log to the database
+
+    setLog(newlog);
+
+}
+
+function setLog(log:Object){
+
+
+}
+
+//get log if it exists in the database, and broadcast that message to the people in the room
+function getLogIfExists(uuid: String, target_uuid: String): Object{
+    let chatlog:Object = {}
+    //poll the database to get the chat log of this chat.
+
+    // form a json object.
+
+    return chatlog;
+}
+
+const joinOrCreateRoom = async (data: any, ws: any) => {
+    console.log("someone tried to make a room")
+    try {
+        var { roomID, clientID } = data;
+
+        // check if room exist or not
+        const roomExist = roomID in rooms;
+        if (!roomExist) { //no room exists
+            console.log(`the room ${roomID} doesn't exist`);
+            //create room.
+
+            rooms[roomID] = {};
+            var obj:any = {};
+            //let obj = [];
+            var users:any = {}
+            users[clientID] = ws;
+            obj["users"] = users;
+            obj["log"] = []
+            
+            //ws['admin'] = true;
+            ws.send(JSON.stringify({
+                'message': 'room created succesfully',
+                'status': 1
+            }));
+            console.log("no room exists under that name");
+
+            //check to see if a database entry exists, and if so populate the room's chats
+            const chat = await Chat.findOne(
+                {
+                    where: 
+                    { 
+                        room_id: roomID
+                    } 
+                }
+            );
+            if(chat){
+                obj["log"] = chat.log;
+            }else{
+                //create a database entry in the chats table with empty json.
+                console.log("adding a new entry to the chat table")
+                Chat.create({
+                    room_id: roomID, 
+                    log: []
+                })
+            }
+
+            console.log('creating room with the following object:')
+            console.log(obj);
+
+            rooms[roomID] = obj;
+            ws['roomID'] = roomID;
+            ws['clientID'] = clientID;
+        
+            return;
+        } else { // a room exists. 
+            console.log(`the room ${roomID} exists already`);
+            //join room
+
+            const inRoom = clientExistInRoom(roomID, ws, clientID)
+            if (inRoom) {
+                ws.send(JSON.stringify({
+                    "message": "you are already in a room",
+                    "status": 0
+                }));
+            } else {
+                console.log("Attempting to join the room that was requested...");
+                //join the room that you requested.
+                //append to the users field of the rooms object.
+                console.log(rooms[roomID].users);
+                rooms[roomID].users[clientID] = ws;
+
+                console.log(rooms[roomID])
+                ws['roomID'] = roomID
+                ws['clientID'] = clientID;
+                ws.send(JSON.stringify({
+                    "message": "Joined succesfully",
+                    "status": 1
+                }));
+            }
+        }
+    } catch (error) {
+        console.log(error);
+        ws.send(JSON.stringify({
+            'message': 'there was some problem joining or creating a room',
+            'status': 0
+        }));
+    }
+}
+
+
+//updates the most recent log message by the other person to read 
+function setReadRecent(roomID:any, clientID:String){
+    //start at most recent and work backwards
+    
+    for(let i = rooms[roomID].log.length - 1  ; i>=0; i-- ){
+        
+        if(rooms[roomID].log[i].sender != clientID){
+            rooms[roomID].log[i].read = true;
+            break;
+        }
+        
+    }
+}
+
+
+// send message 
+const sendMessage = (data: any, ws: any, Status = null) => {
+    try {
+        var { roomID, message, clientID } = data;
+        //check whether room exist or not
+        const roomExist = roomID in rooms;
+        if (!roomExist) {
+            ws.send(JSON.stringify({
+                'message': 'Check room id',
+                'status': 0
+            }));
+            return;
+        }
+        // check whether client is in room or not
+        const clientExist = clientExistInRoom(roomID, ws, clientID);
+        if (!clientExist) {
+            ws.send(JSON.stringify({
+                'message': "You are not allowed to send message",
+                'status': 0
+            }));
+            return;
+        }
+        const obj = rooms[roomID].users;
+        console.log("object: ");
+        console.log(obj);
+
+        //add the message to the log
+        /*
+        the log will be a list of objects where each object has this format
+        {
+            "message" : "the text of the message of whatever."
+            "timestamp" : "the time the message was sent"
+            "sender" : "uuid of the sender", 
+            "read" : "true or false" (only check the most recent one sent by the other.)
+        }
+        */
+
+        let logmessage:Object = {
+            "message" : message,
+            "timestamp" : Date.now(),
+            "sender" : clientID,
+            "read" : false
+        }
+        rooms[roomID].log.push(logmessage);
+        console.log(rooms[roomID].log);
+
+        //loop through the entries that are not the user themselves
+        for(var user in obj){
+            if(obj[user] !== ws){
+                //if it is a synchronous conversation, set the most recent to read
+                setReadRecent(roomID,clientID);
+                obj[user].send(JSON.stringify({
+                    'message': message,
+                    'status': Status ? Status : 1
+                }));
+            }
+        }
+
+
+        // for (let i = 0; i < obj.length; i++) {
+        //     var temp = obj[i];
+        //     for (var innerObject in temp) {
+        //         var wsClientID = temp[innerObject];
+        //         if (ws !== wsClientID) {
+        //             wsClientID.send(JSON.stringify({
+        //                 'message': message,
+        //                 'status': Status ? Status : 1
+        //             }));
+        //         }
+        //     }
+        // }
+
+
+
+    } catch (error) {
+        console.log(error)
+        ws.send(JSON.stringify({
+            'message': 'There was some problem in sending message',
+            'status': 0
+        }));
+    }
+}
+
+const leaveRoom = async (ws: any, data: any) => {
+    //TODO add the database call to save the log. 
+    try {
+        const { roomID, clientID} = data;
+        // manual code started------------------------------------------------------------
+        const roomExist = roomID in rooms;
+        if (!roomExist) {
+            ws.send(JSON.stringify({
+                'message': 'Check room id',
+                'status': 0
+            }));
+            return;
+        }
+
+        //remove the user from the rooms entry
+        delete rooms[roomID].users[clientID];  
+        console.log(rooms[roomID].users);
+
+        //check if the entry is null, and if so then save to the database and delete the room itself.
+        if(rooms[roomID].users.length == 0){
+            console.log("There are no users left in the room, deleting")
+            await Chat.update(
+                {
+                  log: rooms[roomID].log
+                },
+                { where: { room_id: roomID } }
+            )
+            delete rooms[roomID]
+        }
+
+
+        // if ('admin' in ws) {
+        //     data['message'] = "Admin left the room.";
+        //     //sendMessage(data,ws,Status = 2);
+        //     sendMessage(data, ws);
+        //     delete rooms[ws.roomID]
+        //     return;
+        // }
+        // else {
+            // find the index of object
+            //let lst_obj = rooms[roomID].users;
+            //var index = null;
+
+
+
+
+
+            // for (let i = 0; i < lst_obj.length; i++) {
+            //     var temp_obj = lst_obj[i];
+            //     for (var key in temp_obj) {
+            //         var temp_inside = temp_obj[key]
+            //         if ('admin' in temp_inside) {
+            //             temp_inside.send(JSON.stringify({
+            //                 'message': 'Somebody leave the room',
+            //                 'status': 3
+            //             }));
+            //         }
+            //         if (ws == temp_inside) {
+            //             index = i;
+            //         }
+            //     }
+            // }
+
+
+            // if (index != null) {
+            //     rooms[roomID].users.splice(index, 1);
+            //     console.log((rooms[roomID].length));
+            // }
+        // }
+
+
+    } catch (error) {
+        ws.send(JSON.stringify({
+            'message': 'There was some problem----------------------',
+            'status': 0
+        }))
+    }
+
+}
+
+const available_room = (ws: any) => {
+    try {
+        var available_room_id = [];
+        for (var i in rooms) {
+            available_room_id.push(parseInt(i));
+        }
+        ws.send(JSON.stringify({
+            "rooms": available_room_id,
+            "status": 4
+        }))
+    } catch (error) {
+        ws.send(JSON.stringify({
+            'message': 'There was some problem----------------------',
+            'status': 0
+        }))
+    }
+}
+
+wss.on('connection', async function connection(ws: any){
+    try {
+        ws.on('message', async (recieveData: any) => {
+            console.log(recieveData);
+            var data = JSON.parse(recieveData);
+            console.log(data)
+            const error = paramsExist(data);
+            if (!error) {
+                ws.send(JSON.stringify({
+                    'message': 'check params',
+                    'status': 0
+                }));
+                return;
+            }
+            
+            var { targetID, meta, message, clientID, token } = data;
+
+            //create the room id from the targetID and the clientID
+            console.log(targetID)
+            console.log
+            let roomID:String;
+            if(targetID < clientID){
+                roomID = targetID + "$" + clientID
+            }else{
+                roomID = clientID + "$" + targetID
+            }
+            console.log(roomID);
+            
+
+            data = {roomID, meta, message, clientID, token}
+
+
+            //authentication
+
+            let result: number = -1;
+            try {
+                result = await validate_auth(clientID, token);
+            } catch (err: any) {
+                console.error(err.stack);
+                ws.send(JSON.stringify({
+                    'message': 'server error',
+                    'status': 0
+                }));
+                //TODO leave the room if they are in it.
+                //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
+                ws.terminate();
+                return;
+            }
+            //if invalid, return without completing. 
+            if (result != 0) {
+
+                ws.send(JSON.stringify({
+                    'message': 'Authentication Parameters were invalid.',
+                    'status': 0
+                }));
+                //TODO leave the room if they are in it.
+                //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
+                ws.terminate();
+                return
+            }
+
+            //now check to make sure that they are trying to access a valid match. 
+            
+            //need to check the swipe table for when type = 2
+            
+
+        
+            switch (meta) {
+                case "join_or_create_room":
+
+                    const match = await Swipe.findOne(
+                        {
+                            where: 
+                            { 
+                                uuid: clientID,
+                                target_uuid: targetID,
+                                type: 2
+                            } 
+                        }
+                    );
+                    if(match){
+                        joinOrCreateRoom(data, ws);
+                        console.log(rooms)
+                        break;
+                    } else {
+                        ws.send(JSON.stringify({
+                            "message": "No match exists between these people",
+                            "status": 0
+                        }));
+                        ws.terminate();
+                        break;
+                    }
+                    
+
+
+                // case "create_room":
+                //     createRoom(data, ws);
+                //     console.log(rooms);
+                //     break;
+
+                // case "join_room":
+                //     joinRoom(data, ws);
+                //     console.log(rooms);
+                //     break;
+
+                case "send_message":
+                    sendMessage(data, ws);
+                    console.log(rooms);
+                    break;
+
+                // case "show_all_rooms":
+                //   ws.send(JSON.stringify({
+                //     "rooms":[rooms]
+                //   }))
+                //   break;
+                default:
+                    ws.send(JSON.stringify({
+                        "message": "Unsupported meta data provided provide valid data",
+                        "status": 0
+                    }));
+                    break;
+            }
+        })
+
+        ws.on('close', function (data: any) {
+            console.log("connection close request.")
+            leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
+            ws.terminate();
+        });
+
+        //ws.on('pong', heartbeat,);
+        ws.on('pong', function () {
+            ws.isAlive = true;
+        })
+    } catch (error) {
+        ws.send(JSON.stringify({
+            "message": "there was some problem",
+            "status": 0
+        }))
+    }
+});
+
+const interval = setInterval(function ping() {
+    var a = wss.clients;
+    wss.clients.forEach(function each(ws: any) {
+        if (ws.isAlive === false) {
+            leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID });
+            ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping(noop);
+    });
+}, 50000);
+
+const serverFree = setInterval(() => {
+    var removeKey = [];
+    for (const obj in rooms) {
+        if (rooms[obj].length < 1) {
+            removeKey.push(obj);
+        }
+    }
+    for (var i = 0; i < removeKey.length; i++) {
+        delete rooms[removeKey[i]];
+    }
+}, 30000)
 
 //joi schemas
 
@@ -201,6 +785,12 @@ const update_filter_schema = Joi.object({
     maxDistance: Joi.number().optional()
 });
 
+const get_people_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    number: Joi.number().min(1).max(25).required()
+})
+
 //TODO add with statement so that you can't have multiple of the multiple choice ones. 
 
 //Template for comments, copy and use the below 
@@ -222,10 +812,16 @@ app.get('/', (request: Request, responsed: Response) => {
     response.redirect('https://pulldating.tips');
 });
 
+
 app.get('/test', (req: Request, res: Response) => {
     console.log(req.body);
     res.json({ message: "This is just a test function" })
 })
+
+//global section is for returning state variables and updates for the application
+app.get('/global/concurrent-match-limit', (request: Request, response: Response) => {
+    response.json({"limit":maxConcurrentMatches});
+});
 
 /*
 - This function is called when there is no present uuid and/or token cached on the user
@@ -411,7 +1007,7 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         return
     }
     */
-
+    
     //this is where the logic gets a bit complicated. If someone wants to reorder photos, how do we handle that, surely
     //we don't want to reupload all the photos? How would we handle a reupload and a reorganization.
 
@@ -578,7 +1174,6 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
     //console.log("profile:\n" + profile);
     if (profile) {
-
         //gets a new Image path object that reflects the movement of the existing ones.
         function rearrange(reorder_photos:any, prevImagePath:any):object{
             let newImagePath:any = {bucket: prevImagePath['bucket']}
@@ -789,7 +1384,6 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                 console.log("not trying to reorder or upload files, just trying to modify other fields.")
                 standard_field_update_callback()
             }
-
         }
     } else {
         console.log("User profile not found, couldn't update state");
@@ -806,7 +1400,6 @@ outputs:
 - profile object. 
 */
 app.get('/profile', upload.none(), async (req: Request, res: Response) => {
-
     console.log("called get profile")
     console.log(req.body);
 
@@ -1116,7 +1709,6 @@ app.post('/swipe', async (req: Request, res: Response) => {
         }
 
     });
-
     res.json({ message: "Swipe Executed" });
 });
 
@@ -1265,13 +1857,101 @@ app.put('/filter', async (req: Request, res: Response) => {
 
 })
 
-//return the top people that meet the user's filters.
+//return the top people that meet the user's filters. This one is going to require
+//the most thinking of how we want to do it. For now I'm going to implement the most 
+//simplistic version, where it only takes into account the filters applied. 
 /*
 inputs: 
-- 
+- number: 
 */
 app.get('/people', async (req: Request, res: Response) => {
+    //limit the number in the schema
 
+    //authentication
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
+        return
+    }
+    //let value:any;
+    let value: any;
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    try {
+        value = await get_people_schema.validateAsync(input)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({ error: "Inputs were invalid." });
+        return
+    }
+
+    //console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //function specific logic:
+    //find the first (<=number) of people that match the dating goal from the profile, and the filters in the filter table.
+    const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+    if (profile) {
+        //console.log(profile);
+        //get the dating goal of the profile
+        let datingGoal: string = profile.datingGoal
+        //get the filters of that person
+        const filter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+        if (filter) {
+            console.log("Both Filter and Profile exist, making call.")
+            //now we need to find people who's profile matches their dating goal, and who meet's their filters. 
+            //ideally, you also only want to see people who's filters you match as well. (that's a lot tougher challenge.)
+
+            //we need a more complex query, so we're just going to use the SQL
+            //console.log(sequelize);
+
+
+            //find a list of people (limited in number) who's profile matches the filters of the sender, then left join that with the filter table, and return a limited number that are met by the original sender
+            console.log("\n\n\n");
+            //console.log(`sender: ${profile.uuid}`);
+            //console.log(`type: ${typeof(filter.maxBirthDate)}`)
+            //console.log(`max: ${filter.maxBirthDate}`);
+            //console.log(filter.maxBirthDate.toSQL())
+            console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
+            //const maxBD:DateTime = DateTime.fromFormat(filter.maxBirthDate,);
+            //const minBD:DateTime = DateTime.fromFormat(filter.minBirthDate,);
+
+            //get profiles that aren't the sender, and match the filters:
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';`
+            const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${filter.minBirthDate}' and 'birthDate' <= '${filter.maxBirthDate}';`
+
+
+            //join with account table to check if they are active recently? 
+
+            //const query:string = `SELECT * FROM (SELECT * FROM "Profiles" WHERE uuid != ${profile.uuid} and "birthDate" >= ${filter.minBirthDate} and birthDate" <= ${filter.maxBirthDate} LIMIT 100) as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid) WHERE ${profile.birthDate} >= "minBirthDate" and ${profile.birthDate} <= "maxBirthDate" LIMIT ${req.body.number}`;
+            const [results, metadata] = await sequelize.query(query1)
+
+            //const [results,metadata] = await sequelize.query(
+            //    "SELECT * FROM Filters JOIN Profiles ON Filters.uuid = Profiles.uuid"
+            //)
+            console.log(results)
+
+            res.json({ message: "REPLACE THIS" })
+        } else {
+            res.json({ message: "couldn't find the user's filters" })
+        }
+    } else {
+        res.json({ message: "couldn't find the user profile." })
+    }
 });
 
 //block is currently handled under swipe
@@ -1282,6 +1962,8 @@ app.post('/block', async (req:Request,res:Response)=>{
 })
 */
 
+
+//This should be moved, or the endpoint label should be changed to be under swipe.
 //returns the number of blocks on a user.
 app.get('/block/number', async (req: Request, res: Response) => {
 
@@ -1292,7 +1974,65 @@ app.get('/block/number', async (req: Request, res: Response) => {
 app.get('/likes')
 
 //get all current matches
-app.get('/matches')
+
+app.get('/matches', async (req:Request, res:Response) => {
+    //authentication
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
+        return
+    }
+    //let value:any;
+    let value: any;
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    try {
+        value = await simple_get_schema.validateAsync(input)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({ error: "Inputs were invalid." });
+        return
+    }
+
+    //console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //get the matches for the user from the database according to the target uuid provided
+    Swipe.findAll(
+        {
+        attributes: [
+            'target_uuid'
+        ],
+        where: {
+          type: 2,
+          uuid: req.body.uuid
+        }
+    }).then((values => {
+        let retarr:String[] = [];
+        values.forEach(element => {
+            retarr.push(element.target_uuid)
+        });
+
+        console.log(retarr);  
+        res.json(retarr)
+    }));
+
+
+
+}) 
 
 // app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
 //     let minioClient = await connect_minio();
@@ -1347,7 +2087,6 @@ app.get('/test/1', async (req: Request, res: Response) => {
     //res.json({result: "end of test"});
 });
 
-
 app.get('/test/2', async (req: Request, res: Response) => {
     /*
     const swipe = new Swipe({
@@ -1359,9 +2098,15 @@ app.get('/test/2', async (req: Request, res: Response) => {
     */
 })
 
+dbInitialize().then((sequelizeReturn) => {
+    sequelize = sequelizeReturn;
+    server.listen(SERVICE_PORT, () => {
+        if (process.send) {
+            process.send(`Server running at http://localhost:${SERVICE_PORT}\n\n`);
+        }
+        console.log(`Server running at http://localhost:${SERVICE_PORT}\n\n`)
+    });
 
-
-dbInitialize().then(() => {
-    app.listen(SERVICE_PORT);
-    console.log(`listening on port ${SERVICE_PORT.toString()}`);
+    //console.log(`listening on port ${SERVICE_PORT!.toString()}`);
 });
+
