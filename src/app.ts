@@ -1984,6 +1984,7 @@ app.get('/matches', async (req:Request, res:Response) => {
     //let value:any;
     let value: any;
     let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    input = Object.assign(input, { uuid: req.headers.uuid});
     try {
         value = await simple_get_schema.validateAsync(input)
     } catch (err) {
