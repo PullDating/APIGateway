@@ -357,7 +357,7 @@ const sendMessage = (data: any, ws: any, Status = null) => {
     }
 }
 
-const leaveRoom = (ws: any, data: any) => {
+const leaveRoom = async (ws: any, data: any) => {
     //TODO add the database call to save the log. 
     try {
         const { roomID, clientID} = data;
@@ -375,8 +375,17 @@ const leaveRoom = (ws: any, data: any) => {
         delete rooms[roomID].users[clientID];  
         console.log(rooms[roomID].users);
 
-        //check if the entry is null, and if so then save to the database
-
+        //check if the entry is null, and if so then save to the database and delete the room itself.
+        if(rooms[roomID].users.length == 0){
+            console.log("There are no users left in the room, deleting")
+            await Chat.update(
+                {
+                  log: rooms[roomID].log
+                },
+                { where: { room_id: roomID } }
+            )
+            delete rooms[roomID]
+        }
 
 
         // if ('admin' in ws) {
@@ -522,7 +531,7 @@ wss.on('connection', async function connection(ws: any){
                             { 
                                 uuid: clientID,
                                 target_uuid: targetID,
-                                type: 3
+                                type: 2
                             } 
                         }
                     );
@@ -1497,7 +1506,65 @@ app.get('/block/number', async (req: Request, res: Response) => {
 app.get('/likes')
 
 //get all current matches
-app.get('/matches')
+
+app.get('/matches', async (req:Request, res:Response) => {
+    //authentication
+    if (req.headers.authorization == null) {
+        res.json({ error: "Authentication token was not supplied." });
+        return
+    }
+    //let value:any;
+    let value: any;
+    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    try {
+        value = await simple_get_schema.validateAsync(input)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.json({ error: "Inputs were invalid." });
+        return
+    }
+
+    //console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //get the matches for the user from the database according to the target uuid provided
+    Swipe.findAll(
+        {
+        attributes: [
+            'target_uuid'
+        ],
+        where: {
+          type: 2,
+          uuid: req.body.uuid
+        }
+    }).then((values => {
+        let retarr:String[] = [];
+        values.forEach(element => {
+            retarr.push(element.target_uuid)
+        });
+
+        console.log(retarr);  
+        res.json(retarr)
+    }));
+
+
+
+}) 
 
 
 
