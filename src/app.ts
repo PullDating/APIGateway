@@ -95,6 +95,38 @@ var rooms: any = {};
 }
 */
 
+//return message format (not implemented but I want to work towards it)
+/*
+{
+    "message": " ", //a display message that they could use to show an error, or for confirmation or something.
+    "payload" : " ", //if they are trying to get something, such as a log history, it will be in the payload field.
+    "status" : " ", //0 if there was an error, 1 if it is a successful response.
+    "code" : " ", //code that tells what the messsage was for.
+
+}
+
+codes:
+
+1 - room created successfully
+2 - joined room successfully
+3 - sending previous messages from the database
+4 - message from the other user
+401 - missing parameters, or invalid parameters
+402 - authentication was invalid
+403 - already in a room
+404 - generic error
+405 - problem joining or creating room
+406 - room didn't exist that you tried to send information to
+407 - you are not allowed to send a message in the given room
+408 - some general problem sending a message
+409 - trying to leave invalid room
+410 - no match exists with the person they're trying to message
+411 - the meta data inputted was invalid.
+
+
+
+*/
+
 /**
  * Checks to make sure the required fields of the WebSocket request are present.
  * @remarks 
@@ -249,7 +281,8 @@ const joinOrCreateRoom = async (data: any, ws: any) => {
             //ws['admin'] = true;
             ws.send(JSON.stringify({
                 'message': 'room created succesfully',
-                'status': 1
+                'status': 1,
+                "code": 1
             }));
 
             //get the chat from the database and store that in the room log.
@@ -266,8 +299,6 @@ const joinOrCreateRoom = async (data: any, ws: any) => {
             //update the connection with the relevant information.
             ws['roomID'] = roomID;
             ws['clientID'] = clientID;
-        
-            return;
         } else { // a room exists. 
             console.log(`the room ${roomID} exists already`); //debug print. 
 
@@ -276,7 +307,8 @@ const joinOrCreateRoom = async (data: any, ws: any) => {
             if (inRoom) {
                 ws.send(JSON.stringify({
                     "message": "you are already in a room",
-                    "status": 0
+                    "status": 0,
+                    "code" : 405
                 }));
             } else {
                 console.log("Attempting to join the room that was requested...");
@@ -290,15 +322,25 @@ const joinOrCreateRoom = async (data: any, ws: any) => {
 
                 ws.send(JSON.stringify({
                     "message": "Joined succesfully",
-                    "status": 1
+                    "status": 1,
+                    "code" : 2
                 }));
             }
         }
+        //either way, at the end of the joining process, it should send the messages currently in the log to the user so that they can compare it on their local.
+        console.log("sending log to the user.")
+        ws.send(JSON.stringify({
+            "message": "Previous Messages",
+            "payload": rooms[roomID].log,
+            "status": 1,
+            "code" : 3
+        }));
     } catch (error) {
         console.log(error);
         ws.send(JSON.stringify({
             'message': 'there was some problem joining or creating a room',
-            'status': 0
+            'status': 0,
+            "code" : 405
         }));
     }
 }
@@ -341,7 +383,8 @@ const sendMessage = (data: any, ws: any, Status = null) => {
         if (!roomExist) {
             ws.send(JSON.stringify({
                 'message': 'Check room id',
-                'status': 0
+                'status': 0,
+                "code" : 406
             }));
             return;
         }
@@ -350,7 +393,8 @@ const sendMessage = (data: any, ws: any, Status = null) => {
         if (!clientExist) {
             ws.send(JSON.stringify({
                 'message': "You are not allowed to send message",
-                'status': 0
+                'status': 0,
+                "code" : 407
             }));
             return;
         }
@@ -377,7 +421,8 @@ const sendMessage = (data: any, ws: any, Status = null) => {
                 //send the message to them.
                 obj[user].send(JSON.stringify({
                     'message': message,
-                    'status': Status ? Status : 1
+                    'status': Status ? Status : 1,
+                    "code" : 4
                 }));
                 //indicate that they have seen the most recent message (if they are in the room live, they will see it instantly.)
                 setReadRecent(roomID,clientID);
@@ -387,7 +432,8 @@ const sendMessage = (data: any, ws: any, Status = null) => {
         console.log(error)
         ws.send(JSON.stringify({
             'message': 'There was some problem in sending message',
-            'status': 0
+            'status': 0,
+            "code" : 408
         }));
     }
 }
@@ -403,7 +449,8 @@ const leaveRoom = async (ws: any, data: any) => {
         if (!roomExist) {
             ws.send(JSON.stringify({
                 'message': 'Check room id',
-                'status': 0
+                'status': 0,
+                "code" : 406
             }));
             return;
         }
@@ -426,28 +473,11 @@ const leaveRoom = async (ws: any, data: any) => {
     } catch (error) {
         ws.send(JSON.stringify({
             'message': 'There was some problem----------------------',
-            'status': 0
+            'status': 0,
+            "code": 404
         }))
     }
 
-}
-
-const available_room = (ws: any) => {
-    try {
-        var available_room_id = [];
-        for (var i in rooms) {
-            available_room_id.push(parseInt(i));
-        }
-        ws.send(JSON.stringify({
-            "rooms": available_room_id,
-            "status": 4
-        }))
-    } catch (error) {
-        ws.send(JSON.stringify({
-            'message': 'There was some problem----------------------',
-            'status': 0
-        }))
-    }
 }
 
 wss.on('connection', async function connection(ws: any){
@@ -465,7 +495,8 @@ wss.on('connection', async function connection(ws: any){
             if (!error) {
                 ws.send(JSON.stringify({
                     'message': 'check params',
-                    'status': 0
+                    'status': 0,
+                    "code" : 401
                 }));
                 return;
             }
@@ -497,7 +528,8 @@ wss.on('connection', async function connection(ws: any){
                 console.error(err.stack);
                 ws.send(JSON.stringify({
                     'message': 'server error',
-                    'status': 0
+                    'status': 0,
+                    'code' : 404
                 }));
                 //TODO leave the room if they are in it.
                 //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
@@ -509,7 +541,8 @@ wss.on('connection', async function connection(ws: any){
 
                 ws.send(JSON.stringify({
                     'message': 'Authentication Parameters were invalid.',
-                    'status': 0
+                    'status': 0,
+                    'code' : 402
                 }));
                 //TODO leave the room if they are in it.
                 //leaveRoom(ws, { roomID: ws.roomID, clientID: ws.clientID, message: "Leave request" })
@@ -541,7 +574,8 @@ wss.on('connection', async function connection(ws: any){
                     } else {
                         ws.send(JSON.stringify({
                             "message": "No match exists between these people",
-                            "status": 0
+                            "status": 0,
+                            "code" : 410
                         }));
                         ws.terminate();
                         break;
@@ -553,7 +587,8 @@ wss.on('connection', async function connection(ws: any){
                 default: //if the metadata is invalid (not one of the other options)
                     ws.send(JSON.stringify({
                         "message": "Unsupported meta data provided provide valid data",
-                        "status": 0
+                        "status": 0,
+                        "code" : 411
                     }));
                     break;
             }
@@ -573,7 +608,8 @@ wss.on('connection', async function connection(ws: any){
     } catch (error) {
         ws.send(JSON.stringify({
             "message": "there was some problem",
-            "status": 0
+            "status": 0,
+            "code" : 404
         }))
     }
 });
