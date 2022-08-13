@@ -7,7 +7,9 @@ import router from './router';
 
 import { SERVICE_PORT } from "./config/vars";
 
-
+/**
+ * Holds the maximum number of concurrent matches that a user is allowed to have at a given time.
+ */
 let maxConcurrentMatches:number = 3;
 
 //import * as dotenv from 'dotenv';
@@ -669,17 +671,38 @@ enum genderOptions {
 }
 */
 
-const maxProfilePhotos = 6; //the max number of photos that someone is allowed to have in their profile.
+/**
+ * The maximum number of profile photos that a user is allowed to have in their profile (can't have too many to save on resources, and other users' time.)
+ */
+const maxProfilePhotos = 6; 
+/**
+ * The minimum number of profile photos that a user is allowed to have in their profile (we don't want too few because then people are unable to get a clear idea of what they look like.)
+ */
 const minProfilePhotos = 3; //the minimum number of photos that someone is allowed to have in their profile.
 
 //joi base validators
+
+/**
+ * The valid inputs for dating goals
+ */
 const datingGoal_base = Joi.string().valid('longterm', 'shortterm', 'hookup', 'marriage', 'justchatting', 'unsure')
+
+/**
+ * The valid inputs for the body types
+ */
 const bodyType_base = Joi.string().valid('lean', 'average', 'muscular', 'heavy', 'obese')
+
+/**
+ * The valid inputs for gender
+ */
 const gender_base = Joi.string().valid('man', 'woman', 'non-binary')
 
-//the number of these should reflect the min and max profile photos
-//key is the new location, value is the old location. Value of -1 means that it is a new photo
-//then we should be able to interpret from that and what's in the database which were deleted.
+/**
+ * The validator base for the reordering photos logic for upating the profile.
+ * @remarks
+ * - the number of these should reflect the min and max profile photos
+ * - key is the new location, value is the old location. Value of -1 means that it is a new photo
+ */
 let reorder_photos_base = Joi.object({
     0 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
     1 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
@@ -691,6 +714,10 @@ let reorder_photos_base = Joi.object({
 
 
 // Joi Schemas
+
+/**
+ * Joi schema validator for the creation of a profile
+ */
 const create_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
@@ -719,6 +746,9 @@ const create_profile_schema = Joi.object({
     latitude: Joi.number().required(),
 });
 
+/**
+ * Joi validator for the updating of a profile
+ */
 const update_profile_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
@@ -735,12 +765,18 @@ const update_profile_schema = Joi.object({
     reorder_photos: reorder_photos_base
 });
 
+/**
+ * Joi Schema for a simple get request, where you must specify the target and provide authentication.
+ */
 const simple_get_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
     target: Joi.string().guid().optional()
 });
 
+/**
+ * Joi schema for swipes (which includes matching, blocking, like, dislike etc.)
+ */
 const swipe_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
@@ -749,6 +785,9 @@ const swipe_schema = Joi.object({
     datingGoal: datingGoal_base.required()
 });
 
+/**
+ * Joi schema for creating a filter.
+ */
 const create_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
@@ -767,6 +806,9 @@ const create_filter_schema = Joi.object({
     maxDistance: Joi.number().required()
 });
 
+/**
+ * Joi Schema for updating the filters of a user.
+ */
 const update_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
@@ -785,6 +827,9 @@ const update_filter_schema = Joi.object({
     maxDistance: Joi.number().optional()
 });
 
+/**
+ * Joi schema for getting a person's profile.
+ */
 const get_people_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
