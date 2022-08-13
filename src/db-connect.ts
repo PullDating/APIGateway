@@ -1,11 +1,12 @@
 import { Sequelize } from 'sequelize-typescript';
-import { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } from "./config/vars";
+import { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } from "./config";
 import * as path from 'path';
 import Account from './models/account';
 import Auth_Token from './models/auth_token';
 import Profile from './models/profile';
 import Swipe from './models/swipe';
 import Filter from './models/filter';
+import Chat from './models/chat';
 
 export async function dbInitialize():Promise<Sequelize> {
     console.log("Attempting to initialize the database");
@@ -26,7 +27,7 @@ export async function dbInitialize():Promise<Sequelize> {
         dialect: 'postgres'
     });
 
-    sequelize.addModels([Account,Auth_Token,Profile,Swipe,Filter]);
+    sequelize.addModels([Account,Auth_Token,Profile,Swipe,Filter,Chat]);
 
     console.log("created sequelize object");
     try {
