@@ -7,6 +7,14 @@ import router from './router';
 
 import { SERVICE_PORT } from "./config/vars";
 
+//Firebase authentication
+import * as admin from 'firebase-admin';
+const serviceAccount = require("./components/Firebase/serviceAccountKey.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+})
+
 /**
  * Holds the maximum number of concurrent matches that a user is allowed to have at a given time.
  */
@@ -868,6 +876,41 @@ app.get('/global/concurrent-match-limit', (request: Request, response: Response)
     response.json({"limit":maxConcurrentMatches});
 });
 
+//Firebase auth endpoints
+app.post("/sessionLogin", (req:Request, res:Response) => {
+    const idToken = req.body.idToken.toString();
+
+    const expiresIn = 60*60*24*5*1000;
+
+    admin.auth().createSessionCookie(idToken, {expiresIn})
+    .then((sessionCookie) => {
+        console.log(`session cookie: ${sessionCookie}`)
+        const options = {maxAge: expiresIn, httpOnly: true};
+        res.cookie("session", sessionCookie, options);
+        res.end(JSON.stringify({status : "success"}));
+    },
+    (error) => {
+        res.status(401).send("UNAUTHORIZED REQUEST")
+    }
+    )
+})
+
+app.get("/firebasetest", (req:Request, res:Response) => {
+    const sessionCookie = req.cookies.session || "";
+
+    admin.auth().verifySessionCookie(sessionCookie, true /**Check revoked */)
+    .then(() => {
+        res.send({status : "authenticated. "})
+    }).catch(() => {
+        res.send({status : "not authenticated"})
+    })
+})
+
+app.get("/sessionLogout", (req:Request, res:Response) => {
+    res.clearCookie("session");
+    res.send({status: "logged out"})
+})
+
 /*
 - This function is called when there is no present uuid and/or token cached on the user
 device. It is used in two situations. The first is when they are first creating a profile
@@ -882,7 +925,6 @@ what was earlier stored in the database, the function will return with the expec
 It will also create/update the user's account information in the database.
 
 /// /account hosts api endpoints to do with managing, creating and deleting account information.
-
 Inputs: 
 - phone: string
 - (optional) sms_code: string
