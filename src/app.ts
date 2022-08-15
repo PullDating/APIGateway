@@ -876,6 +876,35 @@ app.get('/global/concurrent-match-limit', (request: Request, response: Response)
     response.json({"limit":maxConcurrentMatches});
 });
 
+/**
+ * Expects the ID token from firebase in the header "id"
+ */
+app.get('/auth/login', (req:Request, res:Response) => {
+    //get the id from the header
+    console.log(req.headers.id)
+    let idToken:any = null;
+    if(req.headers.id !== null){
+        idToken = req.headers.id;
+    }
+    if(idToken == null){
+        console.log("Invalid inputs to /auth/login")
+        return;
+    }
+    
+    //compare with the admin api
+    admin.auth().verifyIdToken(idToken).then((decodedToken) => {
+        const uid = decodedToken.uid;
+        //then return the auth token and uuid to the user
+        //should we just use their uid as the 
+        console.log("The user has successfuly authenticated!!!")
+        res.sendStatus(200);
+    }).catch((error) => {
+        console.log(error)
+        return
+    })
+
+})
+
 //Firebase auth endpoints
 app.post("/sessionLogin", (req:Request, res:Response) => {
     const idToken = req.body.idToken.toString();
