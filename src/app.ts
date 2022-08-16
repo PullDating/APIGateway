@@ -7,6 +7,14 @@ import router from './router';
 
 import { SERVICE_PORT } from "./config/vars";
 
+//Firebase authentication
+import * as admin from 'firebase-admin';
+const serviceAccount = require("./components/Firebase/serviceAccountKey.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+})
+
 /**
  * Holds the maximum number of concurrent matches that a user is allowed to have at a given time.
  */
@@ -868,92 +876,102 @@ app.get('/global/concurrent-match-limit', (request: Request, response: Response)
     response.json({"limit":maxConcurrentMatches});
 });
 
-/*
-- This function is called when there is no present uuid and/or token cached on the user
-device. It is used in two situations. The first is when they are first creating a profile
-for the very first time, and the second is when they have lost their token/it expired. 
-In either case, they call this function. First they call it without the sms_code parameter.
-In this case, the function takes their inputted phone number and forwards it to the Firebase
-SMS service to send them a verification code. (Not 100% sure on how this part works just yet)
-The Firebase SMS service will pass the expected code to the function, which will then store it
-in the database along with the expected phone number. The user, having received the code will
-call the function again, this time with the sms_code argument. If the code is correct, and matches
-what was earlier stored in the database, the function will return with the expected return values.
-It will also create/update the user's account information in the database.
-
-/// /account hosts api endpoints to do with managing, creating and deleting account information.
-
-Inputs: 
-- phone: string
-- (optional) sms_code: string
-Outputs:
-- user_exists: boolean //tells the device if it is a new user or an existing one
-- uuid: string //the uuid of the user so that they can cache it on device
-- token: string //the api token/key that is cached on the user's device that allows them to make calls to the rest of the api.
-*/
-app.post('/account/get_auth', async (req: Request, res: Response) => {
-    //TODO add the functionality in another file and call it here.
-
-    const body = req.body;
-    //check to ensure that the required parameter is present. 
-    if (!body.phone) {
-        res.status(400).json({ message: "Required parameter 'phone' is missing" });
+/**
+ * Expects the ID token from firebase in the header "id", as well as the phone number in headers "phone"
+ * returns a valid uuid token pair to the user to be stored for auth requests.
+ */
+app.get('/auth/login', (req:Request, res:Response) => {
+    //get the id from the header
+    console.log(req.headers.id)
+    let idToken:any = null;
+    let phone:any = null;
+    if(req.headers.id !== null){
+        idToken = req.headers.id;
+    }
+    if(req.headers.phone !== null){
+        phone = req.headers.phone;
+    }
+    if(idToken == null || phone == null){
+        console.log("Invalid inputs to /auth/login")
         return;
     }
-    let phone: string = body.phone;
-    //verify that the phone number is in a valid format.
-    if (!phone.match(/^(\+?\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/)) {
-        res.status(400).json({ message: "Parameter 'phone' is invalid" });
-        return;
-    }
-    // Normalize the phone number into a string like '+13324882155'
-    phone = phone.replace(/[^\d+]+/g, '');
-    phone = phone.replace(/^00/, '+');
-    if (phone.match(/^1/)) phone = '+' + phone;
-    if (!phone.match(/^\+/)) phone = '+1' + phone;
-    //check to see if the user with the phone number already exists.
-    let userExists: boolean = false;
-    try {
-        const search = await Account.findAll({
+    
+    //compare with the admin api
+    admin.auth().verifyIdToken(idToken).then(async (decodedToken) => {
+        const uid = decodedToken.uid;
+        //then return the auth token and uuid to the user
+        //should we just use their uid as the 
+
+        //check the database to see if there is a user with that phone number in the Accouts table
+        const account = await Account.findOne({
             where: {
-                phone: phone
+                phone: phone     
             }
         });
-        console.log(`search: ${search}`);
-        if (search.length == 0) {
-            console.log("phone search result was empty");
-            userExists = false;
+        if(account === null){
+            console.log("account doesn't exist, need to create one.")
+            //if there is not, then create an entry, and set the state to 0.
+            const newAccount = await Account.create({
+                phone: phone,
+                state: 0
+            })
+            console.log(`Created uuid: ${newAccount.uuid}`);
+            // then also create an entry in the auth_tokens table, with that uuid to generate a token.
+            const newAuth_Token = await Auth_Token.create({
+                uuid: newAccount.uuid,
+                expiry: DateTime.local().plus({months: 6})
+            })
+            //then return the uuid and the token that have been found/generated to the user.
+            res.status(200).send({
+                "uuid" : newAccount.uuid,
+                "token" : newAuth_Token.token
+            });
+            return;
         } else {
-            console.log("phone search result was not empty");
-            userExists = true;
+            console.log("account does exist, returning the auth details.")
+            //if there is, then get the uuid from that entry (and set the last active ideally)
+            const newAuth_Token = await Auth_Token.findOne({
+                where: {
+                    uuid: account.uuid
+                }
+            });
+            if(newAuth_Token === null){
+                console.log("There was an error in authentication because an auth token was empty when it shouldn't be.");
+                res.status(400).send("There was an error with authentication, please contact a system admin.")
+            }else{
+                if(newAuth_Token.expiry < DateTime.now()){
+                    console.log("The auth token was expired, so a new one is being generated.")
+                    //this means that it has expired. 
+                    //delete the old entry, then create a new one with the same uuid and return that
+                    await newAuth_Token.destroy();
+                    const nonExpiredAuthToken = await Auth_Token.create({
+                        uuid: account.uuid,
+                        expiry: DateTime.local().plus({months: 6})
+                    })
+                    //then return the uuid and the token that have been found/generated to the user.
+                    res.status(200).send({
+                        "uuid" : account.uuid,
+                        "token" : nonExpiredAuthToken.token
+                    });
+                    return;
+                } else {
+                    console.log("Account existed and the auth token was good, returning it...")
+                    //if it is not expired, simply return the existing information.
+                    res.status(200).send({
+                        "uuid" : account.uuid,
+                        "token" : newAuth_Token.token
+                    });
+                    return;
+                }
+            }
         }
-    } catch (err: any) {
-        console.error(err.stack);
-        res.status(500).json({ message: "Server error" });
-        return;
-    }
+    }).catch((error) => {
+        console.log(error)
+        res.status(400).send(error);
+        return
+    })
 
-    //TODO hook this up with the firebase auth.
-
-    if (body.sms_code) { //if the sms code is entered.
-
-    } else { //if the sms code is not entered
-
-    }
-
-    //use this code to generate an auth_token for 1 year in future
-    /*
-    const auth = new Auth_Token({
-        uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
-        expiry: new Date().setFullYear(new Date().getFullYear() + 1)
-    });
-    auth.save();
-    */
-
-
-
-    res.json({ result: "Eh. whatever" });
-});
+})
 
 //to allow users to delete their account (set it to the deleted state)
 app.put('/account/delete', async (req: Request, res: Response) => {

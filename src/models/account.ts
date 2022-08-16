@@ -30,12 +30,7 @@ export default class Account extends Model{
     //phone number is used for authentication purposes and verifying identity
     @AllowNull(false)
     @Column(DataType.STRING(50))
-    get phone(): string {
-        return this.getDataValue('phone');
-    }
-    set phone(value: string) {
-        this.setDataValue('phone', value);
-    }
+    phone!: string;
 
     //the last time that the user was active.
     @AllowNull(false)

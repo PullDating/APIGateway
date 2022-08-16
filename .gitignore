@@ -4,3 +4,4 @@ node_modules
 .env
 src/config/.env.development
 config.ts
+src/components/Firebase/serviceAccountKey.json
