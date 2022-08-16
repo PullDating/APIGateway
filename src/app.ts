@@ -865,12 +865,6 @@ app.get('/', (request: Request, responsed: Response) => {
     response.redirect('https://pulldating.tips');
 });
 
-
-app.get('/test', (req: Request, res: Response) => {
-    console.log(req.body);
-    res.json({ message: "This is just a test function" })
-})
-
 //global section is for returning state variables and updates for the application
 app.get('/global/concurrent-match-limit', (request: Request, response: Response) => {
     response.json({"limit":maxConcurrentMatches});
@@ -2097,70 +2091,6 @@ app.get('/matches', async (req:Request, res:Response) => {
 
 
 }) 
-
-// app.post('/storage/miniotest3' , upload.array('photos', 2), async (req:Request, res:Response) => {
-//     let minioClient = await connect_minio();
-//     console.log(req.files);
-//     //the files are getting uploaded to /uploads, but I cannot figure out how to interpret/receive them in the code.
-
-//     console.log(req.body.uuid)
-
-//     var filenames = (req.files as Array<Express.Multer.File>).map(function(file: any) {
-//         return file.filename;
-//     });
-
-//     console.log(filenames)
-
-//     //get the file paths for the newly uploaded files.
-//     var filepaths = (req.files as Array<Express.Multer.File>).map(function(file: any) {
-//         return file.path;
-//     });
-
-//     console.log(filepaths)
-
-//     //await set_user_photos_from_path(req.body.uuid, filepaths, minioClient)
-
-
-//     res.json({message: "god help us all."})
-// });
-
-app.get('/storage/miniotest4', async (req: Request, res: Response) => {
-    let objects: string[] = ['123$0', '123$1'];
-    let minioClient = await connect_minio();
-    await get_user_photos(minioClient, 'nanortheast', objects)
-});
-
-
-
-
-// /test stuff is just for messing around. Delete before pushing to main/production
-app.get('/test/1', async (req: Request, res: Response) => {
-
-    //this should not be this broken lol.
-    //const person = Account.create({
-    //    phone: "6123273482",
-    //    state: 0,
-    //});
-
-    const auth = new Auth_Token({
-        uuid: "311b8f93-a76e-48ba-97cb-c995d0dc918c",
-        expiry: DateTime.local(2025, 2, 11, 11, 11, 11, 11)//new Date().setFullYear(new Date().getFullYear() + 1)
-    });
-    auth.save();
-
-    //res.json({result: "end of test"});
-});
-
-app.get('/test/2', async (req: Request, res: Response) => {
-    /*
-    const swipe = new Swipe({
-        uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
-        target_uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
-        type: 0,
-    });
-    swipe.save();
-    */
-})
 
 dbInitialize().then((sequelizeReturn) => {
     sequelize = sequelizeReturn;
