@@ -877,7 +877,8 @@ app.get('/global/concurrent-match-limit', (request: Request, response: Response)
 });
 
 /**
- * Expects the ID token from firebase in the header "id"
+ * Expects the ID token from firebase in the header "id", as well as the phone number in headers "phone"
+ * returns a valid uuid token pair to the user to be stored for auth requests.
  */
 app.get('/auth/login', (req:Request, res:Response) => {
     //get the id from the header
@@ -971,127 +972,6 @@ app.get('/auth/login', (req:Request, res:Response) => {
     })
 
 })
-
-//Firebase auth endpoints
-app.post("/sessionLogin", (req:Request, res:Response) => {
-    const idToken = req.body.idToken.toString();
-
-    const expiresIn = 60*60*24*5*1000;
-
-    admin.auth().createSessionCookie(idToken, {expiresIn})
-    .then((sessionCookie) => {
-        console.log(`session cookie: ${sessionCookie}`)
-        const options = {maxAge: expiresIn, httpOnly: true};
-        res.cookie("session", sessionCookie, options);
-        res.end(JSON.stringify({status : "success"}));
-    },
-    (error) => {
-        res.status(401).send("UNAUTHORIZED REQUEST")
-    }
-    )
-})
-
-app.get("/firebasetest", (req:Request, res:Response) => {
-    const sessionCookie = req.cookies.session || "";
-
-    admin.auth().verifySessionCookie(sessionCookie, true /**Check revoked */)
-    .then(() => {
-        res.send({status : "authenticated. "})
-    }).catch(() => {
-        res.send({status : "not authenticated"})
-    })
-})
-
-app.get("/sessionLogout", (req:Request, res:Response) => {
-    res.clearCookie("session");
-    res.send({status: "logged out"})
-})
-
-/*
-- This function is called when there is no present uuid and/or token cached on the user
-device. It is used in two situations. The first is when they are first creating a profile
-for the very first time, and the second is when they have lost their token/it expired. 
-In either case, they call this function. First they call it without the sms_code parameter.
-In this case, the function takes their inputted phone number and forwards it to the Firebase
-SMS service to send them a verification code. (Not 100% sure on how this part works just yet)
-The Firebase SMS service will pass the expected code to the function, which will then store it
-in the database along with the expected phone number. The user, having received the code will
-call the function again, this time with the sms_code argument. If the code is correct, and matches
-what was earlier stored in the database, the function will return with the expected return values.
-It will also create/update the user's account information in the database.
-
-/// /account hosts api endpoints to do with managing, creating and deleting account information.
-Inputs: 
-- phone: string
-- (optional) sms_code: string
-Outputs:
-- user_exists: boolean //tells the device if it is a new user or an existing one
-- uuid: string //the uuid of the user so that they can cache it on device
-- token: string //the api token/key that is cached on the user's device that allows them to make calls to the rest of the api.
-*/
-app.post('/account/get_auth', async (req: Request, res: Response) => {
-    //TODO add the functionality in another file and call it here.
-
-    const body = req.body;
-    //check to ensure that the required parameter is present. 
-    if (!body.phone) {
-        res.status(400).json({ message: "Required parameter 'phone' is missing" });
-        return;
-    }
-    let phone: string = body.phone;
-    //verify that the phone number is in a valid format.
-    if (!phone.match(/^(\+?\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/)) {
-        res.status(400).json({ message: "Parameter 'phone' is invalid" });
-        return;
-    }
-    // Normalize the phone number into a string like '+13324882155'
-    phone = phone.replace(/[^\d+]+/g, '');
-    phone = phone.replace(/^00/, '+');
-    if (phone.match(/^1/)) phone = '+' + phone;
-    if (!phone.match(/^\+/)) phone = '+1' + phone;
-    //check to see if the user with the phone number already exists.
-    let userExists: boolean = false;
-    try {
-        const search = await Account.findAll({
-            where: {
-                phone: phone
-            }
-        });
-        console.log(`search: ${search}`);
-        if (search.length == 0) {
-            console.log("phone search result was empty");
-            userExists = false;
-        } else {
-            console.log("phone search result was not empty");
-            userExists = true;
-        }
-    } catch (err: any) {
-        console.error(err.stack);
-        res.status(500).json({ message: "Server error" });
-        return;
-    }
-
-    //TODO hook this up with the firebase auth.
-
-    if (body.sms_code) { //if the sms code is entered.
-
-    } else { //if the sms code is not entered
-
-    }
-
-    //use this code to generate an auth_token for 1 year in future
-    /*
-    const auth = new Auth_Token({
-        uuid: "b6a9f755-7668-483d-adc8-16b3127b81b8",
-        expiry: new Date().setFullYear(new Date().getFullYear() + 1)
-    });
-    auth.save();
-    */
-
-
-
-    res.json({ result: "Eh. whatever" });
-});
 
 //to allow users to delete their account (set it to the deleted state)
 app.put('/account/delete', async (req: Request, res: Response) => {
