@@ -814,6 +814,9 @@ const create_filter_schema = Joi.object({
     maxDistance: Joi.number().required()
 });
 
+const height_base = Joi.number().min(55).max(274)
+const distance_base = Joi.number().min(0).max(100)
+
 /**
  * Joi Schema for updating the filters of a user.
  */
@@ -822,8 +825,8 @@ const update_filter_schema = Joi.object({
     uuid: Joi.string().guid().required(),
     minBirthDate: Joi.date().optional(),
     maxBirthDate: Joi.date().optional(),
-    minHeight: Joi.number().optional(),
-    maxHeight: Joi.number().optional(),
+    minHeight: height_base.optional(),
+    maxHeight: height_base.optional(),
     genderMan: Joi.boolean().optional(),
     genderWoman: Joi.boolean().optional(),
     genderNonBinary: Joi.boolean().optional(),
@@ -832,7 +835,7 @@ const update_filter_schema = Joi.object({
     btMuscular: Joi.boolean().optional(),
     btHeavy: Joi.boolean().optional(),
     btObese: Joi.boolean().optional(),
-    maxDistance: Joi.number().optional()
+    maxDistance: distance_base.optional()
 });
 
 /**
@@ -1775,10 +1778,11 @@ app.post('/filter', async (req: Request, res: Response) => {
     //console.log(req.body);
 
     //authentication
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
         return
     }
+
     //let value:any;
     let value: any;
     let inputNoToken = Object.assign({
@@ -1844,43 +1848,31 @@ app.post('/filter', async (req: Request, res: Response) => {
 //update the filters for a user
 app.put('/filter', async (req: Request, res: Response) => {
     //authentication
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
         return
     }
-    //let value:any;
-    let value: any;
 
-    //need to modify this to be ok it is not present maybe with ? or :? idk.
-    let inputNoToken = {
-        uuid: req.body.uuid,
-        ...(req.body.birthDate.min && { minBirthDate: req.body.birthDate.min }),
-        ...(req.body.birthDate.max && { maxBirthDate: req.body.birthDate.max }),
-        ...(req.body.height.min && { minHeight: req.body.height.min }),
-        ...(req.body.height.max && { maxHeight: req.body.height.max }),
-        ...(req.body.gender.man && { genderMan: req.body.gender.man }),
-        ...(req.body.gender.woman && { genderWoman: req.body.gender.woman }),
-        ...(req.body.gender.nonBinary && { genderNonBinary: req.body.gender.nonBinary }),
-        ...(req.body.bodyType.lean && { btLean: req.body.bodyType.lean }),
-        ...(req.body.bodyType.average && { btAverage: req.body.bodyType.average }),
-        ...(req.body.bodyType.muscular && { btMuscular: req.body.bodyType.muscular }),
-        ...(req.body.bodyType.heavy && { btHeavy: req.body.bodyType.heavy }),
-        ...(req.body.bodyType.obese && { btObese: req.body.bodyType.obese }),
-        ...(req.body.maxDistance && { maxDistance: req.body.maxDistance })
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
     }
 
-    console.log(inputNoToken)
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
 
-    let input = Object.assign(inputNoToken, {
-        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
-    });
+    let merged = {...authinputs, ...req.body}
 
+    //schema validation
+    let value;
     try {
-        value = await update_filter_schema.validateAsync(input)
+        value = await update_filter_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
@@ -1889,7 +1881,7 @@ app.put('/filter', async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, authinputs.token);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1902,14 +1894,14 @@ app.put('/filter', async (req: Request, res: Response) => {
     }
 
     //function specific logic
-    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+    const existingFilter = await Filter.findOne({ where: { uuid: authinputs.uuid } });
     if (existingFilter) {
-        console.log("creating filter");
-        Filter.update(inputNoToken, { where: { uuid: req.body.uuid } });
-        res.json({ message: "filter created" });
+        console.log("updating filter");
+        Filter.update(req.body, { where: { uuid: authinputs.uuid } });
+        res.status(200).json({ message: "filter updated" });
     }
     else {
-        res.json({ message: "filter doesn't exist, call post if you intend to create one." });
+        res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
     }
 
 })
