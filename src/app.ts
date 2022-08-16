@@ -1772,46 +1772,33 @@ app.post('/swipe', async (req: Request, res: Response) => {
     res.json({ message: "Swipe Executed" });
 });
 
-//set the filters for a profile for the first time 
 app.post('/filter', async (req: Request, res: Response) => {
-
-    //console.log(req.body);
-
     //authentication
     if (req.headers.authorization == null || req.headers.uuid == null) {
         res.status(400).json({ error: "Authentication token or uuid was not supplied." });
         return
     }
 
-    //let value:any;
-    let value: any;
-    let inputNoToken = Object.assign({
-        uuid: req.body.uuid,
-        minBirthDate: req.body.birthDate.min,
-        maxBirthDate: req.body.birthDate.max,
-        minHeight: req.body.height.min,
-        maxHeight: req.body.height.max,
-        genderMan: req.body.gender.man,
-        genderWoman: req.body.gender.woman,
-        genderNonBinary: req.body.gender.nonBinary,
-        btLean: req.body.bodyType.lean,
-        btAverage: req.body.bodyType.average,
-        btMuscular: req.body.bodyType.muscular,
-        btHeavy: req.body.bodyType.heavy,
-        btObese: req.body.bodyType.obese,
-        maxDistance: req.body.maxDistance,
-    })
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
 
-    let input = Object.assign(inputNoToken, {
-        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
-    });
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
 
+    let merged = {...authinputs, ...req.body}
+
+    //schema validation
+    let value;
     try {
-        value = await create_filter_schema.validateAsync(input)
+        value = await create_filter_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
@@ -1820,7 +1807,7 @@ app.post('/filter', async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, authinputs.token);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1828,22 +1815,31 @@ app.post('/filter', async (req: Request, res: Response) => {
     }
     //if invalid, return without completing. 
     if (result != 0) {
-        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
-    //check to see if one exists already, if so, ignore it.
-    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
-    if (!existingFilter) {
-        console.log("creating filter");
-        Filter.create(inputNoToken);
-        res.json({ message: "filter created" });
-    }
-    else {
-        res.json({ message: "filter already existed, try put if you intend to modify." });
+
+    //join the uuid with the body
+    let input = req.body;
+    input.uuid = authinputs.uuid;
+
+    console.log(input);
+
+    //function specific logic
+    try{
+        Filter.create(input)
+        res.status(200).json({"message" : "filter created successfully"})
+        return
+    } catch (e) {
+        console.log("there was an error with filter creation.")
+        console.log(e)
+        res.status(400).json({error : e})
+        return
     }
 
-});
+})
+
 
 //update the filters for a user
 app.put('/filter', async (req: Request, res: Response) => {
