@@ -883,23 +883,90 @@ app.get('/auth/login', (req:Request, res:Response) => {
     //get the id from the header
     console.log(req.headers.id)
     let idToken:any = null;
+    let phone:any = null;
     if(req.headers.id !== null){
         idToken = req.headers.id;
     }
-    if(idToken == null){
+    if(req.headers.phone !== null){
+        phone = req.headers.phone;
+    }
+    if(idToken == null || phone == null){
         console.log("Invalid inputs to /auth/login")
         return;
     }
     
     //compare with the admin api
-    admin.auth().verifyIdToken(idToken).then((decodedToken) => {
+    admin.auth().verifyIdToken(idToken).then(async (decodedToken) => {
         const uid = decodedToken.uid;
         //then return the auth token and uuid to the user
         //should we just use their uid as the 
-        console.log("The user has successfuly authenticated!!!")
-        res.sendStatus(200);
+
+        //check the database to see if there is a user with that phone number in the Accouts table
+        const account = await Account.findOne({
+            where: {
+                phone: phone     
+            }
+        });
+        if(account === null){
+            console.log("account doesn't exist, need to create one.")
+            //if there is not, then create an entry, and set the state to 0.
+            const newAccount = await Account.create({
+                phone: phone,
+                state: 0
+            })
+            console.log(`Created uuid: ${newAccount.uuid}`);
+            // then also create an entry in the auth_tokens table, with that uuid to generate a token.
+            const newAuth_Token = await Auth_Token.create({
+                uuid: newAccount.uuid,
+                expiry: DateTime.local().plus({months: 6})
+            })
+            //then return the uuid and the token that have been found/generated to the user.
+            res.status(200).send({
+                "uuid" : newAccount.uuid,
+                "token" : newAuth_Token.token
+            });
+            return;
+        } else {
+            console.log("account does exist, returning the auth details.")
+            //if there is, then get the uuid from that entry (and set the last active ideally)
+            const newAuth_Token = await Auth_Token.findOne({
+                where: {
+                    uuid: account.uuid
+                }
+            });
+            if(newAuth_Token === null){
+                console.log("There was an error in authentication because an auth token was empty when it shouldn't be.");
+                res.status(400).send("There was an error with authentication, please contact a system admin.")
+            }else{
+                if(newAuth_Token.expiry < DateTime.now()){
+                    console.log("The auth token was expired, so a new one is being generated.")
+                    //this means that it has expired. 
+                    //delete the old entry, then create a new one with the same uuid and return that
+                    await newAuth_Token.destroy();
+                    const nonExpiredAuthToken = await Auth_Token.create({
+                        uuid: account.uuid,
+                        expiry: DateTime.local().plus({months: 6})
+                    })
+                    //then return the uuid and the token that have been found/generated to the user.
+                    res.status(200).send({
+                        "uuid" : account.uuid,
+                        "token" : nonExpiredAuthToken.token
+                    });
+                    return;
+                } else {
+                    console.log("Account existed and the auth token was good, returning it...")
+                    //if it is not expired, simply return the existing information.
+                    res.status(200).send({
+                        "uuid" : account.uuid,
+                        "token" : newAuth_Token.token
+                    });
+                    return;
+                }
+            }
+        }
     }).catch((error) => {
         console.log(error)
+        res.status(400).send(error);
         return
     })
 
