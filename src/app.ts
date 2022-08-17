@@ -921,7 +921,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
             //then return the uuid and the token that have been found/generated to the user.
             res.status(200).send({
                 "uuid" : newAccount.uuid,
-                "token" : newAuth_Token.token
+                "token" : newAuth_Token.token,
+                "state" : newAccount.state
             });
             return;
         } else {
@@ -948,7 +949,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
                     //then return the uuid and the token that have been found/generated to the user.
                     res.status(200).send({
                         "uuid" : account.uuid,
-                        "token" : nonExpiredAuthToken.token
+                        "token" : nonExpiredAuthToken.token,
+                        "state" : account.state
                     });
                     return;
                 } else {
@@ -956,7 +958,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
                     //if it is not expired, simply return the existing information.
                     res.status(200).send({
                         "uuid" : account.uuid,
-                        "token" : newAuth_Token.token
+                        "token" : newAuth_Token.token,
+                        "state" : account.state
                     });
                     return;
                 }
@@ -1131,16 +1134,6 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
                         lastLocation: { type: 'Point', coordinates: [req.body.longitude, req.body.latitude] },
                     });
                     await profile.save();
-
-                    //update the account table to reflect the fact that they now have a profile.
-                    const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-                    if (account) {
-                        account.state = 1;
-                        await account.save();
-                    } else { //the ordering of this is bad, but this shouldn't occur.
-                        console.log("User account not found, couldn't update state");
-                        //TODO Do something to correct for this issue if it occurs. 
-                    }
                     //success message
                     res.json({ message: "profile created" })
                 }
@@ -1789,7 +1782,13 @@ app.post('/filter', async (req: Request, res: Response) => {
         "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
     }
 
+    console.log("Req.body:")
+    console.log(req.body);
+
     let merged = {...authinputs, ...req.body}
+
+    console.log("merged")
+    console.log(merged)
 
     //schema validation
     let value;
@@ -1829,14 +1828,24 @@ app.post('/filter', async (req: Request, res: Response) => {
     //function specific logic
     try{
         Filter.create(input)
-        res.status(200).json({"message" : "filter created successfully"})
-        return
     } catch (e) {
         console.log("there was an error with filter creation.")
         console.log(e)
         res.status(400).json({error : e})
         return
     }
+
+    //update the account table to reflect the fact that they now have a profile.
+    const account = await Account.findOne({ where: { uuid: authinputs.uuid } });
+    if (account) {
+        account.state = 1;
+        await account.save();
+    } else { //the ordering of this is bad, but this shouldn't occur.
+        console.log("User account not found, couldn't update state");
+        //TODO Do something to correct for this issue if it occurs. 
+    }
+
+    res.status(200).json({"message" : "filter created successfully"})
 
 })
 
