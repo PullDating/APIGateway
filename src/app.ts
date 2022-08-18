@@ -22,7 +22,7 @@ let maxConcurrentMatches:number = 3;
 
 //import * as dotenv from 'dotenv';
 //import { SERVICE_PORT } from 'env';
-import { Request, Response, Router } from 'express';
+import e, { Request, Response, Router } from 'express';
 
 const { passThrough } = require('stream');
 //const SERVICE_PORT = process.env['SERVICE_PORT'];
@@ -793,14 +793,16 @@ const swipe_schema = Joi.object({
     datingGoal: datingGoal_base.required()
 });
 
+const age_base = Joi.number().min(18).max(100)
+
 /**
  * Joi schema for creating a filter.
  */
 const create_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    minBirthDate: Joi.date().required(),
-    maxBirthDate: Joi.date().required(),
+    minAge: age_base.required(),
+    maxAge: age_base.required(),
     minHeight: Joi.number().required(),
     maxHeight: Joi.number().required(),
     genderMan: Joi.boolean().required(),
@@ -814,16 +816,19 @@ const create_filter_schema = Joi.object({
     maxDistance: Joi.number().required()
 });
 
+const height_base = Joi.number().min(55).max(274)
+const distance_base = Joi.number().min(0).max(100)
+
 /**
  * Joi Schema for updating the filters of a user.
  */
 const update_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    minBirthDate: Joi.date().optional(),
-    maxBirthDate: Joi.date().optional(),
-    minHeight: Joi.number().optional(),
-    maxHeight: Joi.number().optional(),
+    minAge: age_base.optional(),
+    maxAge: age_base.optional(),
+    minHeight: height_base.optional(),
+    maxHeight: height_base.optional(),
     genderMan: Joi.boolean().optional(),
     genderWoman: Joi.boolean().optional(),
     genderNonBinary: Joi.boolean().optional(),
@@ -832,7 +837,7 @@ const update_filter_schema = Joi.object({
     btMuscular: Joi.boolean().optional(),
     btHeavy: Joi.boolean().optional(),
     btObese: Joi.boolean().optional(),
-    maxDistance: Joi.number().optional()
+    maxDistance: distance_base.optional()
 });
 
 /**
@@ -918,7 +923,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
             //then return the uuid and the token that have been found/generated to the user.
             res.status(200).send({
                 "uuid" : newAccount.uuid,
-                "token" : newAuth_Token.token
+                "token" : newAuth_Token.token,
+                "state" : newAccount.state
             });
             return;
         } else {
@@ -945,7 +951,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
                     //then return the uuid and the token that have been found/generated to the user.
                     res.status(200).send({
                         "uuid" : account.uuid,
-                        "token" : nonExpiredAuthToken.token
+                        "token" : nonExpiredAuthToken.token,
+                        "state" : account.state
                     });
                     return;
                 } else {
@@ -953,7 +960,8 @@ app.get('/auth/login', (req:Request, res:Response) => {
                     //if it is not expired, simply return the existing information.
                     res.status(200).send({
                         "uuid" : account.uuid,
-                        "token" : newAuth_Token.token
+                        "token" : newAuth_Token.token,
+                        "state" : account.state
                     });
                     return;
                 }
@@ -1128,16 +1136,6 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
                         lastLocation: { type: 'Point', coordinates: [req.body.longitude, req.body.latitude] },
                     });
                     await profile.save();
-
-                    //update the account table to reflect the fact that they now have a profile.
-                    const account = await Account.findOne({ where: { uuid: req.body.uuid } });
-                    if (account) {
-                        account.state = 1;
-                        await account.save();
-                    } else { //the ordering of this is bad, but this shouldn't occur.
-                        console.log("User account not found, couldn't update state");
-                        //TODO Do something to correct for this issue if it occurs. 
-                    }
                     //success message
                     res.json({ message: "profile created" })
                 }
@@ -1769,45 +1767,39 @@ app.post('/swipe', async (req: Request, res: Response) => {
     res.json({ message: "Swipe Executed" });
 });
 
-//set the filters for a profile for the first time 
 app.post('/filter', async (req: Request, res: Response) => {
-
-    //console.log(req.body);
-
     //authentication
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
         return
     }
-    //let value:any;
-    let value: any;
-    let inputNoToken = Object.assign({
-        uuid: req.body.uuid,
-        minBirthDate: req.body.birthDate.min,
-        maxBirthDate: req.body.birthDate.max,
-        minHeight: req.body.height.min,
-        maxHeight: req.body.height.max,
-        genderMan: req.body.gender.man,
-        genderWoman: req.body.gender.woman,
-        genderNonBinary: req.body.gender.nonBinary,
-        btLean: req.body.bodyType.lean,
-        btAverage: req.body.bodyType.average,
-        btMuscular: req.body.bodyType.muscular,
-        btHeavy: req.body.bodyType.heavy,
-        btObese: req.body.bodyType.obese,
-        maxDistance: req.body.maxDistance,
-    })
 
-    let input = Object.assign(inputNoToken, {
-        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
-    });
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
 
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    console.log("Req.body:")
+    console.log(req.body);
+
+    let merged = {...authinputs, ...req.body}
+
+    console.log("merged")
+    console.log(merged)
+
+    //schema validation
+    let value;
     try {
-        value = await create_filter_schema.validateAsync(input)
+        value = await create_filter_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
@@ -1816,7 +1808,7 @@ app.post('/filter', async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, authinputs.token);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1824,63 +1816,70 @@ app.post('/filter', async (req: Request, res: Response) => {
     }
     //if invalid, return without completing. 
     if (result != 0) {
-        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
-    //check to see if one exists already, if so, ignore it.
-    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
-    if (!existingFilter) {
-        console.log("creating filter");
-        Filter.create(inputNoToken);
-        res.json({ message: "filter created" });
-    }
-    else {
-        res.json({ message: "filter already existed, try put if you intend to modify." });
+
+    //join the uuid with the body
+    let input = req.body;
+    input.uuid = authinputs.uuid;
+
+    console.log(input);
+
+    //function specific logic
+    try{
+        Filter.create(input)
+    } catch (e) {
+        console.log("there was an error with filter creation.")
+        console.log(e)
+        res.status(400).json({error : e})
+        return
     }
 
-});
+    //update the account table to reflect the fact that they now have a profile.
+    const account = await Account.findOne({ where: { uuid: authinputs.uuid } });
+    if (account) {
+        account.state = 1;
+        await account.save();
+    } else { //the ordering of this is bad, but this shouldn't occur.
+        console.log("User account not found, couldn't update state");
+        //TODO Do something to correct for this issue if it occurs. 
+    }
+
+    res.status(200).json({"message" : "filter created successfully"})
+
+})
+
 
 //update the filters for a user
 app.put('/filter', async (req: Request, res: Response) => {
     //authentication
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
         return
     }
-    //let value:any;
-    let value: any;
 
-    //need to modify this to be ok it is not present maybe with ? or :? idk.
-    let inputNoToken = {
-        uuid: req.body.uuid,
-        ...(req.body.birthDate.min && { minBirthDate: req.body.birthDate.min }),
-        ...(req.body.birthDate.max && { maxBirthDate: req.body.birthDate.max }),
-        ...(req.body.height.min && { minHeight: req.body.height.min }),
-        ...(req.body.height.max && { maxHeight: req.body.height.max }),
-        ...(req.body.gender.man && { genderMan: req.body.gender.man }),
-        ...(req.body.gender.woman && { genderWoman: req.body.gender.woman }),
-        ...(req.body.gender.nonBinary && { genderNonBinary: req.body.gender.nonBinary }),
-        ...(req.body.bodyType.lean && { btLean: req.body.bodyType.lean }),
-        ...(req.body.bodyType.average && { btAverage: req.body.bodyType.average }),
-        ...(req.body.bodyType.muscular && { btMuscular: req.body.bodyType.muscular }),
-        ...(req.body.bodyType.heavy && { btHeavy: req.body.bodyType.heavy }),
-        ...(req.body.bodyType.obese && { btObese: req.body.bodyType.obese }),
-        ...(req.body.maxDistance && { maxDistance: req.body.maxDistance })
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
     }
 
-    console.log(inputNoToken)
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
 
-    let input = Object.assign(inputNoToken, {
-        token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
-    });
+    let merged = {...authinputs, ...req.body}
 
+    //schema validation
+    let value;
     try {
-        value = await update_filter_schema.validateAsync(input)
+        value = await update_filter_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
@@ -1889,7 +1888,7 @@ app.put('/filter', async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, authinputs.token);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1902,16 +1901,97 @@ app.put('/filter', async (req: Request, res: Response) => {
     }
 
     //function specific logic
-    const existingFilter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+    const existingFilter = await Filter.findOne({ where: { uuid: authinputs.uuid } });
     if (existingFilter) {
-        console.log("creating filter");
-        Filter.update(inputNoToken, { where: { uuid: req.body.uuid } });
-        res.json({ message: "filter created" });
+        console.log("updating filter");
+        try{
+            console.log(req.body);
+            Filter.update(req.body, { where: { uuid: authinputs.uuid } }).then(() => {
+                console.log("filter has been updated successfully.")
+                res.status(200).json({ message: "filter updated" });
+            });
+            
+        } catch (e){
+            res.status(400).json({message : e});
+        }
     }
     else {
-        res.json({ message: "filter doesn't exist, call post if you intend to create one." });
+        res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
     }
 
+})
+
+app.get('/filter', async (req:Request, res: Response) => {
+    console.log('get filters requested');
+    //authentication
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
+        return
+    }
+
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    let merged = {...authinputs, ...req.body}
+
+    //schema validation
+    let value;
+    try {
+        value = await update_filter_schema.validateAsync(merged)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.status(400).json({ error: "Inputs were invalid." });
+        return
+    }
+
+    console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(authinputs.uuid, authinputs.token);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //now get the values from the database and return then to the user.
+
+    const existingFilter = await Filter.findOne({ where: { uuid: authinputs.uuid } });
+    if (existingFilter) {
+        res.status(200).json({
+            'maxDistance' : existingFilter.maxDistance.toFixed().toString(),
+            'genderMan' : existingFilter.genderMan.toString(),
+            'genderWoman' : existingFilter.genderWoman.toString(),
+            'genderNonBinary' : existingFilter.genderNonBinary.toString(),
+            'minAge' : existingFilter.minAge.toString(),
+            'maxAge' : existingFilter.maxAge.toString(),
+            'minHeight' : existingFilter.minHeight.toFixed().toString(),
+            'maxHeight' : existingFilter.maxHeight.toFixed().toString(),
+            'btObese' : existingFilter.btObese.toString(),
+            'btHeavy' : existingFilter.btHeavy.toString(),
+            'btMuscular' : existingFilter.btMuscular.toString(),
+            'btAverage' : existingFilter.btAverage.toString(),
+            'btLean' : existingFilter.btLean.toString(),
+        })
+    }
+    else {
+        res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
+    }
 })
 
 //return the top people that meet the user's filters. This one is going to require
@@ -1982,27 +2062,27 @@ app.get('/people', async (req: Request, res: Response) => {
             //console.log(`type: ${typeof(filter.maxBirthDate)}`)
             //console.log(`max: ${filter.maxBirthDate}`);
             //console.log(filter.maxBirthDate.toSQL())
-            console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
+            //console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
             //const maxBD:DateTime = DateTime.fromFormat(filter.maxBirthDate,);
             //const minBD:DateTime = DateTime.fromFormat(filter.minBirthDate,);
 
             //get profiles that aren't the sender, and match the filters:
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';`
-            const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
+            //const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${filter.minBirthDate}' and 'birthDate' <= '${filter.maxBirthDate}';`
 
 
             //join with account table to check if they are active recently? 
 
             //const query:string = `SELECT * FROM (SELECT * FROM "Profiles" WHERE uuid != ${profile.uuid} and "birthDate" >= ${filter.minBirthDate} and birthDate" <= ${filter.maxBirthDate} LIMIT 100) as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid) WHERE ${profile.birthDate} >= "minBirthDate" and ${profile.birthDate} <= "maxBirthDate" LIMIT ${req.body.number}`;
-            const [results, metadata] = await sequelize.query(query1)
+            //const [results, metadata] = await sequelize.query(query1)
 
             //const [results,metadata] = await sequelize.query(
             //    "SELECT * FROM Filters JOIN Profiles ON Filters.uuid = Profiles.uuid"
             //)
-            console.log(results)
+            //console.log(results)
 
-            res.json({ message: "REPLACE THIS" })
+            //res.json({ message: "REPLACE THIS" })
         } else {
             res.json({ message: "couldn't find the user's filters" })
         }
