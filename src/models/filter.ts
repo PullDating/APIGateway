@@ -28,12 +28,12 @@ export default class Filter extends Model{
     //age related
 
     @AllowNull(false)
-    @Column(DataType.DATE)
-    minBirthDate!: DateTime;
+    @Column(DataType.INTEGER)
+    minAge!: number;
 
     @AllowNull(false)
-    @Column(DataType.DATE)
-    maxBirthDate!: DateTime;
+    @Column(DataType.INTEGER)
+    maxAge!: number;
 
     //height related
 

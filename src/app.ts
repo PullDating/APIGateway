@@ -793,14 +793,16 @@ const swipe_schema = Joi.object({
     datingGoal: datingGoal_base.required()
 });
 
+const age_base = Joi.number().min(18).max(100)
+
 /**
  * Joi schema for creating a filter.
  */
 const create_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    minBirthDate: Joi.date().required(),
-    maxBirthDate: Joi.date().required(),
+    minAge: age_base.required(),
+    maxAge: age_base.required(),
     minHeight: Joi.number().required(),
     maxHeight: Joi.number().required(),
     genderMan: Joi.boolean().required(),
@@ -823,8 +825,8 @@ const distance_base = Joi.number().min(0).max(100)
 const update_filter_schema = Joi.object({
     token: Joi.string().guid().required(),
     uuid: Joi.string().guid().required(),
-    minBirthDate: Joi.date().optional(),
-    maxBirthDate: Joi.date().optional(),
+    minAge: age_base.optional(),
+    maxAge: age_base.optional(),
     minHeight: height_base.optional(),
     maxHeight: height_base.optional(),
     genderMan: Joi.boolean().optional(),
@@ -1902,8 +1904,16 @@ app.put('/filter', async (req: Request, res: Response) => {
     const existingFilter = await Filter.findOne({ where: { uuid: authinputs.uuid } });
     if (existingFilter) {
         console.log("updating filter");
-        Filter.update(req.body, { where: { uuid: authinputs.uuid } });
-        res.status(200).json({ message: "filter updated" });
+        try{
+            console.log(req.body);
+            Filter.update(req.body, { where: { uuid: authinputs.uuid } }).then(() => {
+                console.log("filter has been updated successfully.")
+                res.status(200).json({ message: "filter updated" });
+            });
+            
+        } catch (e){
+            res.status(400).json({message : e});
+        }
     }
     else {
         res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
@@ -1968,8 +1978,8 @@ app.get('/filter', async (req:Request, res: Response) => {
             'genderMan' : existingFilter.genderMan.toString(),
             'genderWoman' : existingFilter.genderWoman.toString(),
             'genderNonBinary' : existingFilter.genderNonBinary.toString(),
-            'minBirthDate' : existingFilter.minBirthDate,
-            'maxBirthDate' : existingFilter.maxBirthDate,
+            'minAge' : existingFilter.minAge.toString(),
+            'maxAge' : existingFilter.maxAge.toString(),
             'minHeight' : existingFilter.minHeight.toFixed().toString(),
             'maxHeight' : existingFilter.maxHeight.toFixed().toString(),
             'btObese' : existingFilter.btObese.toString(),
@@ -2052,27 +2062,27 @@ app.get('/people', async (req: Request, res: Response) => {
             //console.log(`type: ${typeof(filter.maxBirthDate)}`)
             //console.log(`max: ${filter.maxBirthDate}`);
             //console.log(filter.maxBirthDate.toSQL())
-            console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
+            //console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
             //const maxBD:DateTime = DateTime.fromFormat(filter.maxBirthDate,);
             //const minBD:DateTime = DateTime.fromFormat(filter.minBirthDate,);
 
             //get profiles that aren't the sender, and match the filters:
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';`
-            const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
+            //const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${filter.minBirthDate}' and 'birthDate' <= '${filter.maxBirthDate}';`
 
 
             //join with account table to check if they are active recently? 
 
             //const query:string = `SELECT * FROM (SELECT * FROM "Profiles" WHERE uuid != ${profile.uuid} and "birthDate" >= ${filter.minBirthDate} and birthDate" <= ${filter.maxBirthDate} LIMIT 100) as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid) WHERE ${profile.birthDate} >= "minBirthDate" and ${profile.birthDate} <= "maxBirthDate" LIMIT ${req.body.number}`;
-            const [results, metadata] = await sequelize.query(query1)
+            //const [results, metadata] = await sequelize.query(query1)
 
             //const [results,metadata] = await sequelize.query(
             //    "SELECT * FROM Filters JOIN Profiles ON Filters.uuid = Profiles.uuid"
             //)
-            console.log(results)
+            //console.log(results)
 
-            res.json({ message: "REPLACE THIS" })
+            //res.json({ message: "REPLACE THIS" })
         } else {
             res.json({ message: "couldn't find the user's filters" })
         }
