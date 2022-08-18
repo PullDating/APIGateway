@@ -22,7 +22,7 @@ let maxConcurrentMatches:number = 3;
 
 //import * as dotenv from 'dotenv';
 //import { SERVICE_PORT } from 'env';
-import { Request, Response, Router } from 'express';
+import e, { Request, Response, Router } from 'express';
 
 const { passThrough } = require('stream');
 //const SERVICE_PORT = process.env['SERVICE_PORT'];
@@ -1909,6 +1909,79 @@ app.put('/filter', async (req: Request, res: Response) => {
         res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
     }
 
+})
+
+app.get('/filter', async (req:Request, res: Response) => {
+    console.log('get filters requested');
+    //authentication
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token or uuid was not supplied." });
+        return
+    }
+
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    let merged = {...authinputs, ...req.body}
+
+    //schema validation
+    let value;
+    try {
+        value = await update_filter_schema.validateAsync(merged)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.status(400).json({ error: "Inputs were invalid." });
+        return
+    }
+
+    console.log("Got past schema validation.")
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(authinputs.uuid, authinputs.token);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //now get the values from the database and return then to the user.
+
+    const existingFilter = await Filter.findOne({ where: { uuid: authinputs.uuid } });
+    if (existingFilter) {
+        res.status(200).json({
+            'maxDistance' : existingFilter.maxDistance.toFixed().toString(),
+            'genderMan' : existingFilter.genderMan.toString(),
+            'genderWoman' : existingFilter.genderWoman.toString(),
+            'genderNonBinary' : existingFilter.genderNonBinary.toString(),
+            'minBirthDate' : existingFilter.minBirthDate,
+            'maxBirthDate' : existingFilter.maxBirthDate,
+            'minHeight' : existingFilter.minHeight.toFixed().toString(),
+            'maxHeight' : existingFilter.maxHeight.toFixed().toString(),
+            'btObese' : existingFilter.btObese.toString(),
+            'btHeavy' : existingFilter.btHeavy.toString(),
+            'btMuscular' : existingFilter.btMuscular.toString(),
+            'btAverage' : existingFilter.btAverage.toString(),
+            'btLean' : existingFilter.btLean.toString(),
+        })
+    }
+    else {
+        res.status(400).json({ message: "filter doesn't exist, call post if you intend to create one." });
+    }
 })
 
 //return the top people that meet the user's filters. This one is going to require
