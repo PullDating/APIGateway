@@ -1457,18 +1457,29 @@ outputs:
 app.get('/profile', upload.none(), async (req: Request, res: Response) => {
     console.log("called get profile")
     console.log(req.body);
-
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token was not supplied." });
         return
     }
-    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    let merged = {...authinputs, ...req.body}
+
     try {
-        const value = await simple_get_schema.validateAsync(input)
+        const value = await simple_get_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
@@ -1479,7 +1490,7 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(req.headers.uuid, req.headers.authorization!);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1488,7 +1499,7 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
 
     //if invalid, return without completing. 
     if (result != 0) {
-        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
@@ -1521,16 +1532,15 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
                     await minioClient.presignedGetObject(bucket, object, (err: Error, presignedURL: string) => callback(err, presignedURL))
                 } else {
                     //send the response
-                    res.json({ profile })
+                    res.status(200).json(profile);
                     return
                 }
             }
 
             const object = profile!.imagePath[countfinished]
             await minioClient.presignedGetObject(bucket, object, (err: Error, presignedURL: string) => callback(err, presignedURL))
-
         } else {
-            res.json({ error: "User profile could not be found." });
+            res.status(400).json({ error: "User profile could not be found." });
             return
         }
     }
@@ -1538,7 +1548,7 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
     if (req.body.target) { //return the profile of the target
         await Profile.findOne({ where: { uuid: req.body.target } }).then((profile) => callback(profile));
     } else { //return the profile of the person that made the call
-        await Profile.findOne({ where: { uuid: req.body.uuid } }).then((profile) => callback(profile));
+        await Profile.findOne({ where: { uuid: req.headers.uuid } }).then((profile) => callback(profile));
     }
 
 
