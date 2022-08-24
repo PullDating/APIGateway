@@ -720,6 +720,39 @@ let reorder_photos_base = Joi.object({
     5 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
 }).optional()
 
+//for the new update profile logic.
+//the first minProfilePhotos should be mandatory
+//then the rest up to maxProfilePhotos should be optional.
+
+//THIS ISN"T WORKING FULLY.
+// let change_photos_base = Joi.object();
+// for(let i = 0; i < minProfilePhotos; i++){
+//     change_photos_base.append(
+//         {
+//             i : Joi.number().min(-1).max(maxProfilePhotos-1).required()
+//         }
+//     )
+// }
+// for(let i = minProfilePhotos; i < maxProfilePhotos; i++){
+//     change_photos_base.append(
+//         {
+//             i : Joi.number().min(-1).max(maxProfilePhotos-1).optional()
+//         }
+//     )
+// }
+
+let change_photos_base = Joi.object({
+    0 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    1 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    2 : Joi.number().min(-1).max(maxProfilePhotos-1).required(),
+    3 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+    4 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+    5 : Joi.number().min(-1).max(maxProfilePhotos-1).optional(),
+}).optional()
+
+//console.log("change_photos_base:");
+//console.log(change_photos_base);
+
 
 // Joi Schemas
 
@@ -771,6 +804,22 @@ const update_profile_schema = Joi.object({
     //if the photo doesn't move then the key and value will be the same
     //if the photo didn't exist previously, then the value will be -1 (new photo)
     reorder_photos: reorder_photos_base
+});
+
+const put_profile_schema = Joi.object({
+    token: Joi.string().guid().required(),
+    uuid: Joi.string().guid().required(),
+    gender: gender_base.optional(),
+    datingGoal: datingGoal_base.optional(),
+    biography: Joi.string().max(300).optional(),
+    bodyType: bodyType_base.optional(),
+    longitude: Joi.number().optional(),
+    latitude: Joi.number().optional(),
+    //the key is the index the photo should show up in the profile
+    //the value is the previous index
+    //if the photo doesn't move then the key and value will be the same
+    //if the photo didn't exist previously, then the value will be -1 (new photo)
+    change_photos: change_photos_base,
 });
 
 /**
@@ -1147,21 +1196,14 @@ app.post('/profile', multer_profile_photos_upload.array('photos', maxProfilePhot
         });
 });
 
-// need to add a few more things to save on image uploading:
-// reorder_photos: {
-//     "previous order location" : "new order location"
-//     ...
-//     ...
-// }
-// //ensure that the total number of photos does not exceed the total.
-// add_photos: {
-//     "index in filepaths" : "new order location"
-// }
-// delete_photos: {
-//     "old order location" : 
-// }
-// may have to delete even if they are not in this list (eg they went over the limit.)
-
+/*
+change_photos: {
+    "new order location" : "old order location" //rearrange
+    ...
+    "new order location"  : -1 //newly uploaded file
+}
+//and then remember to garbage collect the old files that are no longer in use.
+*/
 //to update an existing profile within the application.
 app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhotos), async (req: Request, res: Response) => {
 
@@ -1171,17 +1213,18 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
         return file.path;
     });
 
-    //console.log(req.body.reorder_photos)
+    //console.log(req.body.change_photos)
 
-    if(req.body.reorder_photos){
-        //convert it from string to json object.
-        const value:Object = JSON.parse(req.body.reorder_photos)
-        //console.log(value);
-        req.body.reorder_photos = JSON.parse(req.body.reorder_photos)
+    if(req.body.change_photos){
+        // //convert it from string to json object.
+        // const value:Object = JSON.parse(req.body.change_photos)
+        // //console.log(value);
+        req.body.change_photos = JSON.parse(req.body.change_photos)
+        console.log(req.body.change_photos);
     }
 
-    //console.log(req.body.reorder_photos);
-    //console.log("zeroth element: " + req.body.reorder_photos['0'])
+    //console.log(req.body.change_photos);
+    //console.log("zeroth element: " + req.body.change_photos['0'])
 
     if (req.headers.authorization == null) {
         await delete_files(filepaths)
@@ -1192,7 +1235,7 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
     let value: any;
     let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
-        value = await update_profile_schema.validateAsync(input)
+        value = await put_profile_schema.validateAsync(input)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
@@ -1222,29 +1265,44 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
     //start of endpoint specific logic.
 
-    //console.log("printing value");
-   // console.log(value!);
-
     const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
 
     //console.log("profile:\n" + profile);
     if (profile) {
         //gets a new Image path object that reflects the movement of the existing ones.
-        function rearrange(reorder_photos:any, prevImagePath:any):object{
+        function rearrange(change_photos:any, prevImagePath:any):object{
+
+            //the key is the new spot
+            //the value is the old spot, or delete.
+
+            console.log("beginning rearrange:")
+            console.log("previous image path: ")
+            console.log(prevImagePath);
+
+            //create blank one.
             let newImagePath:any = {bucket: prevImagePath['bucket']}
+
+
+
             //loop through and reassign the object names to the right spots.
-            for (var key of Object.keys(reorder_photos)) {
-                if(reorder_photos[key] == -1) { //skip the new ones for this function.
+            //looping through the new locations.
+            for (var key of Object.keys(change_photos)) {
+                //skip if it is to be added.
+                if(change_photos[key] == -1) { //skip the new ones for this function.
                     continue
                 }
-                newImagePath[key] = prevImagePath[reorder_photos[key]]
+                //the new value of the image path is the previous path at the old place.
+                newImagePath[key] = prevImagePath[change_photos[key]]
             }
+
+            console.log("new image path: ")
+            console.log(newImagePath);
+
             //returns new image path
-            return newImagePath
+            return newImagePath;
         }
 
         //database call to update fields.
-
         async function standard_field_update_callback(imagePath?:Object){
 
             const updateData:any = {}
@@ -1262,58 +1320,109 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                     where: {uuid: value['uuid']}
                 }
             ).then(()=>{
-                res.json({message: "Profile updated"})
+                res.status(200).json({message: "Profile updated"})
                 return
             })
         }
 
         const prevImagePath = profile.imagePath;
-        //console.log(prevImagePath)
+        //basically just subtracts 1 for the bucket key, and thus it is the number of images stored previously.
         const count:number = get_num_images_from_imagePath(prevImagePath);
 
         console.log("count: " + count);
         console.log("filepaths: " + filepaths);
 
+        //returns false if no duplicates, true if there are. //WORKING
+        function check_for_duplicate_values(change_photos:any):boolean{
+            //loop through the values of change photos
+            //check to see if any of them appears twice
+            
+
+            let seen:Map<number,boolean> = new Map<number,boolean>;
+
+            //populate seen with false 
+            for(let i = 0; i < change_photos.length; i++){
+                seen.set(i,false);
+            }
+
+            for (var key of Object.keys(change_photos)) {
+                //skip for the -1 photos
+                if(change_photos[key] == -1) { //skip the new ones for this function.
+                    continue
+                }
+
+                if(seen.get(change_photos[key]) == true){
+                    return true;
+                }
+                seen.set(change_photos[key],true);
+
+            }
+
+            return false;
+
+        }
 
         if(filepaths.length > 0){ //they are trying to add images and reorder the existing ones.
             console.log("filepaths was greater than 0")
-            if(req.body.reorder_photos){ // they want to upload photos and reorder them, and perhaps delete old ones.
+            if(req.body.change_photos){ // they want to upload photos and reorder them, and perhaps delete old ones.
+
+                //check for duplicates in the old values
+                if(check_for_duplicate_values(req.body.change_photos)){
+                    delete_files(filepaths);
+                    res.status(400).json({error : "There were duplicate values for the previous image locations."})
+                    return;
+                }
+
+                console.log("Got past the check for duplicates");
 
                 //enure that the first minProfilePhotos number slots are filled.
                 for(let i = 0 ; i < minProfilePhotos; i++){
-                    if(!req.body.reorder_photos[i]){
+                    if(!req.body.change_photos[i]){
                         delete_files(filepaths)
                         res.json({error: "The first " + minProfilePhotos + " photos cannot be empty."})
+                        return;
                     }
                 }
 
+                console.log("Got past check that the min number of photos were filled");
+
                 //figure out how many they are deleting and ensure they have the correct number of photos afterwards
-                //we need to figure out which values prevImagePath did not show up in reorder_photos as a value and get rid of them
+                //we need to figure out which values prevImagePath did not show up in change_photos as a value and get rid of them
                 let seen:boolean[] = new Array(count).fill(false); //which of the prevImagePath locations were used
                 let seen_count:number = 0;
                 let negative_count:number = 0;
-                for(var key of Object.keys(req.body.reorder_photos)){
-                    if(req.body.reorder_photos[key] == -1){ //skip if it is new photo.
+                for(var key of Object.keys(req.body.change_photos)){
+                    if(req.body.change_photos[key] == -1){ //skip if it is new photo.
                         negative_count++
                         continue
                     }
                     seen_count++
-                    seen[req.body.reorder_photos[key]] = true;
+                    seen[req.body.change_photos[key]] = true;
                 }
+
+                console.log("negative_count: " + negative_count);
+                console.log("seen _count: " + seen_count);
+                console.log("seen: " + seen);
 
                 if(negative_count != filepaths.length){
                     await delete_files(filepaths)
-                    res.json({error: "you tried supplying more new files than you indicated in reorder_photos"})
+                    res.json({error: "you tried supplying more new files than you indicated in change_photos"})
                     return;
                 }
 
+                console.log("negative_count was the correct length.")
+
                 let deleted_count:number = count - seen_count;
+
+                console.log("deleted_count: " + deleted_count);
                 //make sure we don't have too many photos
                 if(count + filepaths.length - deleted_count > maxProfilePhotos){
-                    res.json({error: "Too many photos were supplied, either delete more or upload less."})
                     delete_files(filepaths)
+                    res.json({error: "Too many photos were supplied, either delete more or upload less."})
                     return;
                 }
+
+                console.log("Got past check for the number of deletes/inputs balancing out.");
 
                 let minioClient:any = connect_minio()
                 //now find the ones that weren't used and delete them
@@ -1322,41 +1431,75 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                         await delete_file_in_minio(minioClient, prevImagePath['bucket'], prevImagePath[i])
                     }
                 }
+                console.log("Got past the part where we delete all the files in minio that weren't seen.")
 
                 //rearrange the ones that have been there the whole time
-                const newImagePath:any = rearrange(req.body.reorder_photos,prevImagePath)
+                const newImagePath:any = rearrange(req.body.change_photos,prevImagePath)
+
+                console.log("newImagePath after rearrange: "  + newImagePath);
                 //upload the new ones to their respective spots
+
+                console.log("Got past the part where we rearrange.")
                 
                 //make a callback that searches for the next one/ calls the database upload
 
                 //find the first 
-                let orderIndex:number;
+                let orderIndex:number = 0;
                 let filepathsIndex:number = 0;
-                for(let i = 0 ; i < req.body.reorder_photos.length ; i++){
-                    if(req.body.reorder_photos[i] == -1){
+
+                //need to look through keys, not the like an array THIS IS THE ERROR LOCATION
+
+                //I think that my reference might be broken... I think I'm using this wrong.
+
+                // REFERENCE
+                // for(var key of Object.keys(req.body.change_photos)){
+                //     if(req.body.change_photos[key] == -1){
+                //         res.json({error: "if you are not uploading an image file, change_photos should not contain -1"})
+                //         return 
+                //     }
+                // }
+
+                for(let i = 0 ; i < Object.keys(req.body.change_photos).length ; i++){
+                    if(req.body.change_photos[i] == -1){
                         orderIndex = i;
                         break;
                     }
                 }
 
+                console.log("orderIndex: " + orderIndex);
+
                 async function upload_photo_callback(objName:string){
+                    console.log("Done uploading a photo");
+
                     //update the newImagePath
                     newImagePath[orderIndex] = objName
+
+                    console.log("image path now: " + newImagePath);
+
                     filepathsIndex++
                     if(filepathsIndex < filepaths.length){
+                        console.log("Searching for the next file to upload.")
                         //search for the next one.
-                        for(let i = orderIndex ; i < req.body.reorder_photos.length ; i++){
-                            if(req.body.reorder_photos[i] == -1){
+                        let temp = orderIndex;
+                        for(let i = orderIndex+1 ; i < Object.keys(req.body.change_photos).length ; i++){
+                            if(req.body.change_photos[i] == -1){
                                 orderIndex = i;
                                 break;
                             }
                         }
+                        if(temp == orderIndex){
+                            console.log("it was unable to find the next file to upload, even though there should be one.")
+                        }
+                        console.log("Attemping to upload the next photo.")
                         upload_photo(minioClient, newImagePath.bucket, filepaths[filepathsIndex], upload_photo_callback)
                     } else {
                         //done with uploads
+                        console.log("done looking for files, so now going to upload to db")
                         await standard_field_update_callback(newImagePath)
                     }
                 }
+
+                console.log("Attempting to upload the first photo.");
 
                 upload_photo(minioClient, newImagePath.bucket, filepaths[filepathsIndex], upload_photo_callback)
                 
@@ -1390,27 +1533,34 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
 
         } else { //they are not adding any new images.
             console.log("not adding any new photos")
-            if(req.body.reorder_photos){ //they are trying to reorder their existing photos, but not add new ones. (could still be deleting)
+            if(req.body.change_photos){ //they are trying to reorder their existing photos, but not add new ones. (could still be deleting)
                 console.log("trying to reorder/delete photos")
-                //console.log("req.body.reorder_photos:" + req.body.reorder_photos)
+                //console.log("req.body.change_photos:" + req.body.change_photos)
+
+                //check for duplicates in the old values
+                if(check_for_duplicate_values(req.body.change_photos)){
+                    res.status(400).json({error : "There were duplicate values for the previous image locations."})
+                    return;
+                }
+
                 //there should not be any -1 values, becuause that means new image.
-                for(var key of Object.keys(req.body.reorder_photos)){
-                    if(req.body.reorder_photos[key] == -1){
-                        res.json({error: "if you are not uploading an image file, reorder_photos should not contain -1"})
+                for(var key of Object.keys(req.body.change_photos)){
+                    if(req.body.change_photos[key] == -1){
+                        res.json({error: "if you are not uploading an image file, change_photos should not contain -1"})
                         return 
                     }
                 }
 
                 //compare the lengths of the previous count, to the length of the reorder photos to see if they deleted some
-                if(count > Object.keys(req.body.reorder_photos).length){ //they deleted at least a photo as well as rearranging.
+                if(count > Object.keys(req.body.change_photos).length){ //they deleted at least a photo as well as rearranging.
                     console.log("delete a photo and rearrange.")
                     //find the deleted photo(s) and delete them from the minio container
 
-                    //we need to figure out which values prevImagePath did not show up in reorder_photos as a value.
+                    //we need to figure out which values prevImagePath did not show up in change_photos as a value.
                     let seen:boolean[] = new Array(count).fill(false); //which of the prevImagePath locations were used
                    
-                    for(var key of Object.keys(req.body.reorder_photos)){
-                        seen[req.body.reorder_photos[key]] = true;
+                    for(var key of Object.keys(req.body.change_photos)){
+                        seen[req.body.change_photos[key]] = true;
                     }
 
                     //print out the seen array
@@ -1426,22 +1576,26 @@ app.put('/profile', multer_profile_photos_upload.array('photos', maxProfilePhoto
                     }
 
                     //then rearrange and callback
-                    const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
+                    const newImagePath = rearrange(req.body.change_photos,prevImagePath)
                     await standard_field_update_callback(newImagePath)
-                } else { //they are simply rearranging their photos
+                } else { //they are simply rearranging their photos //WORKING
                     console.log("simply trying to reorder photos")
-                    const newImagePath = rearrange(req.body.reorder_photos,prevImagePath)
+                    const newImagePath = rearrange(req.body.change_photos,prevImagePath)
                     standard_field_update_callback(newImagePath)
                 }
 
 
             } else { //they are not trying to reorder photos, but simply update other fields. //PARTIALLY TESTED
+
+                //but what if they are deleting here? 
+
                 console.log("not trying to reorder or upload files, just trying to modify other fields.")
                 standard_field_update_callback()
             }
         }
     } else {
         console.log("User profile not found, couldn't update state");
+        res.status(400).json({error: "User profile was not found, so it couldn't be updated."});
     }
 
     //res.json({ message: "Profile updated." });
