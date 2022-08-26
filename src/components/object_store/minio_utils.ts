@@ -43,9 +43,10 @@ export async function set_user_photos_from_path(uuid: string, imagePaths: string
 
     async function PutObjectCallback() {
         var metaData = {
+            'Content-Type' : 'image/webp',
             hello : "hi"
         }
-        const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
+        const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex') + ".webp";
         await minioClient.fPutObject(bucketName, objName, `./${imagePaths[i]}`, metaData, await async function(err: any, objInfo: any) {
             console.log("Tried fPutObject...")
             if(err){
@@ -116,10 +117,11 @@ export default async function upload_photo(minioClient:any, bucketName:string, i
     console.log("inside upload_photo")
     if(!metaData){
         metaData = {
+            'Content-Type' : 'image/webp',
             hello : "hi"
         }
     }
-    const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex');
+    const objName:string = DateTime.now().toString() + crypto.randomBytes(10).toString('hex') + ".webp";
     await minioClient.fPutObject(bucketName, objName, `./${imagePath}`, metaData, await async function(err: any, objInfo: any) {
         console.log("Tried fPutObject...")
         if(err){
