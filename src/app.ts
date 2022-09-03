@@ -1708,6 +1708,92 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
 
 })
 
+app.get('/profile/primaryphoto', upload.none(), async (req: Request, res: Response) => {
+    console.log("called get profile")
+    console.log(req.body);
+    if (req.headers.authorization == null || req.headers.uuid == null) {
+        res.status(400).json({ error: "Authentication token was not supplied." });
+        return
+    }
+    
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    let merged = {...authinputs, ...req.body}
+
+    try {
+        const value = await simple_get_schema.validateAsync(merged)
+    } catch (err) {
+        console.log("did not pass schema validation.")
+        console.log(err)
+        res.status(400).json({ error: "Inputs were invalid." });
+        return
+    }
+
+    //console.log("Got past schema validation.")
+
+    //still doing authentication to prevent spammed requests. 
+
+    //verify that the two exist together in the auth table.
+    let result: number = -1;
+    try {
+        result = await validate_auth(req.headers.uuid, req.headers.authorization!);
+    } catch (err: any) {
+        console.error(err.stack);
+        res.status(500).json({ message: "Server error" });
+        return;
+    }
+
+    //if invalid, return without completing. 
+    if (result != 0) {
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
+        return
+    }
+
+    //now get the individual photo that is required. 
+
+    //callback that gets the presigned url and returns it to the user
+    async function callback(profile: Profile | null){
+        if (profile != null) {
+            console.log("profile was not null")
+            //look at the provided bucket and image names, and retrieve presigned get links. 
+
+            //connect to minio service
+            let minioClient = connect_minio();
+
+            const bucket: string = profile.imagePath['bucket'];
+            const object = profile!.imagePath[0]
+            await minioClient.presignedGetObject(bucket, object, (err: Error, presignedURL: string) => {
+                
+                if(err){
+                    console.log(err);
+                    res.status(400).json({error: err});
+                } else {
+                    //send the presigned url back to the user.
+                    res.status(200).json({image: presignedURL});
+                }
+            })
+        } else {
+            res.status(400).json({ error: "User profile could not be found." });
+            return
+        }
+    }
+
+    //find the required profile.
+    if (req.body.target) { //return the profile of the target
+        await Profile.findOne({ where: { uuid: req.body.target } }).then((profile) => callback(profile));
+    } else { //return the profile of the person that made the call
+        await Profile.findOne({ where: { uuid: req.headers.uuid } }).then((profile) => callback(profile));
+    }
+});
+
 //allow a user to "like" another person
 app.post('/swipe', async (req: Request, res: Response) => {
     //authentication
