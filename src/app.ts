@@ -2322,7 +2322,6 @@ app.get('/people', async (req: Request, res: Response) => {
 
             //generate gender string
             //form of : and ("gender" = 'gender1' or "gender"='gender2'...)
-
             //if they don't have any of them there is an issue
             if(!filter.genderMan && !filter.genderWoman && !filter.genderNonBinary){
                 res.status(400).json({error: "You haven't selected either men, women, or non-binary. This is a bad state."})
@@ -2357,25 +2356,57 @@ app.get('/people', async (req: Request, res: Response) => {
                 profile.lastLocation.coordinates[1]]
             } 
 
-            //get profiles that aren't the sender, and match the filters:
-            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';` //working
-            //const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
-            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${minBirthDate}' and 'birthDate' <= '${maxBirthDate}';`
-            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and "birthDate" >= '${minBirthDate}';`
+            //generate bodyType string
+            //form of : and ("bodyType" = 'adfads' or "bodyType"='asdjkl'...)
+
+            //if they don't have any of them there is an issue
+            if(!filter.btAverage && !filter.btHeavy && !filter.btLean && !filter.btMuscular && !filter.btObese){
+                res.status(400).json({error: "You haven't selected a valid bodytype. This is a bad state."})
+            }
+
+            let bodyTypeString:String = '';
+            if(filter.btAverage){
+                if(bodyTypeString != ''){
+                    bodyTypeString = bodyTypeString + " or "
+                }
+                bodyTypeString = bodyTypeString + `"bodyType"='average'`;
+            }
+            if (filter.btHeavy){
+                if(bodyTypeString != ''){
+                    bodyTypeString = bodyTypeString + " or "
+                }
+                bodyTypeString = bodyTypeString + `"bodyType"='heavy'`;
+            }
+            if (filter.btLean){
+                if(bodyTypeString != ''){
+                    bodyTypeString = bodyTypeString + " or "
+                }
+                bodyTypeString = bodyTypeString + `"bodyType"='lean'`;
+            }
+            if (filter.btMuscular){
+                if(bodyTypeString != ''){
+                    bodyTypeString = bodyTypeString + " or "
+                }
+                bodyTypeString = bodyTypeString + `"bodyType"='muscular'`;
+            }
+            if (filter.btObese){
+                if(bodyTypeString != ''){
+                    bodyTypeString = bodyTypeString + " or "
+                }
+                bodyTypeString = bodyTypeString + `"bodyType"='obese'`;
+            }
+
+            bodyTypeString = `and (${bodyTypeString})`;
+            console.log(`bodyTypeString: ${bodyTypeString}`);
+
             const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}'\
                 and "birthDate" BETWEEN '${minBirthDate}' and '${maxBirthDate}'\
                 and "height" BETWEEN '${filter.minHeight}' and '${filter.maxHeight}'\
                 and "datingGoal" = '${profile.datingGoal}'\
                 ${genderString}\
                 and ST_DistanceSphere(geometry(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})')), geometry("lastLocation")) <= '${filter.maxDistance}'\
-              ;`
-
-              
-
-
-              //bodytype
-              //distance
-
+                ${bodyTypeString}
+              ;` //working!
 
             console.log(query1);
 
