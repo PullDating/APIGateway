@@ -2308,18 +2308,33 @@ app.get('/people', async (req: Request, res: Response) => {
 
             //find a list of people (limited in number) who's profile matches the filters of the sender, then left join that with the filter table, and return a limited number that are met by the original sender
             console.log("\n\n\n");
-            //console.log(`sender: ${profile.uuid}`);
-            //console.log(`type: ${typeof(filter.maxBirthDate)}`)
-            //console.log(`max: ${filter.maxBirthDate}`);
-            //console.log(filter.maxBirthDate.toSQL())
-            //console.log(`min: ${JSON.stringify(filter.minBirthDate)}`);
-            //const maxBD:DateTime = DateTime.fromFormat(filter.maxBirthDate,);
-            //const minBD:DateTime = DateTime.fromFormat(filter.minBirthDate,);
+            console.log(`sender: ${profile.uuid}`);
+            
+            //get the min and max birth dates from the ages.
+            console.log(`maxAge: ${filter.maxAge}`);
+            console.log(`minAge: ${filter.minAge}`);
+            const minBirthDate = DateTime.now().minus({years:filter.maxAge});
+            const maxBirthDate = DateTime.now().minus({years: filter.minAge});
+            console.log(`maxBirthDate: ${maxBirthDate}`);
+            console.log(`minBirthDate: ${minBirthDate}`);
+            console.log(`maxBirthDate: ${maxBirthDate.toISO()}`);
+            console.log(`minBirthDate: ${minBirthDate.toISO()}`);
 
             //get profiles that aren't the sender, and match the filters:
-            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';`
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';` //working
             //const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
-            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${filter.minBirthDate}' and 'birthDate' <= '${filter.maxBirthDate}';`
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${minBirthDate}' and 'birthDate' <= '${maxBirthDate}';`
+            //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and "birthDate" >= '${minBirthDate}';`
+            const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and "birthDate" BETWEEN '${minBirthDate}' and '${maxBirthDate}';`
+
+
+            console.log(query1);
+
+            const [results,metadata] = await sequelize.query(
+               query1
+            )
+            console.log(results)
+            res.sendStatus(200);
 
 
             //join with account table to check if they are active recently? 
