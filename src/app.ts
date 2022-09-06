@@ -2320,18 +2320,67 @@ app.get('/people', async (req: Request, res: Response) => {
             console.log(`maxBirthDate: ${maxBirthDate.toISO()}`);
             console.log(`minBirthDate: ${minBirthDate.toISO()}`);
 
+            //generate gender string
+            //form of : and ("gender" = 'gender1' or "gender"='gender2'...)
+
+            //if they don't have any of them there is an issue
+            if(!filter.genderMan && !filter.genderWoman && !filter.genderNonBinary){
+                res.status(400).json({error: "You haven't selected either men, women, or non-binary. This is a bad state."})
+            }
+
+            let genderString:String = '';
+            if(filter.genderMan){
+                if(genderString != ''){
+                    genderString = genderString + " or "
+                }
+                genderString = genderString + `"gender"='man'`;
+            }
+            if (filter.genderWoman){
+                if(genderString != ''){
+                    genderString = genderString + " or "
+                }
+                genderString = genderString + `"gender"='woman'`;
+            }
+            if (filter.genderNonBinary){
+                if(genderString != ''){
+                    genderString = genderString + " or "
+                }
+                genderString = genderString + `"gender"='non-binary'`;
+            }
+            genderString = `and (${genderString})`;
+            console.log(`genderString: ${genderString}`);
+
+            console.log(profile.lastLocation);
+            const point = {
+                type: 'Point',
+                coordinates: [profile.lastLocation.coordinates[0],
+                profile.lastLocation.coordinates[1]]
+            } 
+
             //get profiles that aren't the sender, and match the filters:
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}';` //working
             //const query1: string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and height >= 134.34 and 'birthDate' >= '${filter.minBirthDate}';`
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and 'birthDate' >= '${minBirthDate}' and 'birthDate' <= '${maxBirthDate}';`
             //const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and "birthDate" >= '${minBirthDate}';`
-            const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}' and "birthDate" BETWEEN '${minBirthDate}' and '${maxBirthDate}';`
+            const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}'\
+                and "birthDate" BETWEEN '${minBirthDate}' and '${maxBirthDate}'\
+                and "height" BETWEEN '${filter.minHeight}' and '${filter.maxHeight}'\
+                and "datingGoal" = '${profile.datingGoal}'\
+                ${genderString}\
+                and ST_DistanceSphere(geometry(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})')), geometry("lastLocation")) <= '${filter.maxDistance}'\
+              ;`
+
+              
+
+
+              //bodytype
+              //distance
 
 
             console.log(query1);
 
             const [results,metadata] = await sequelize.query(
-               query1
+              query1
             )
             console.log(results)
             res.sendStatus(200);
