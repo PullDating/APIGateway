@@ -2406,15 +2406,68 @@ app.get('/people', async (req: Request, res: Response) => {
                 ${genderString}\
                 and ST_DistanceSphere(geometry(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})')), geometry("lastLocation")) <= '${filter.maxDistance}'\
                 ${bodyTypeString}
-              ;` //working!
+              ` //working!
 
             console.log(query1);
 
-            const [results,metadata] = await sequelize.query(
-              query1
-            )
-            console.log(results)
-            res.sendStatus(200);
+            //need to make sure that you are in their filters as well
+            //need to convert profile.birthDate to an age.
+
+            let gendertablestring:string = '';
+            if(profile.gender == 'man'){
+                gendertablestring = 'Man'
+            }else if(profile.gender == 'non-binary'){
+                gendertablestring = 'NonBinary'
+            }else if(profile.gender == 'woman'){
+                gendertablestring = 'Woman'
+            }
+
+            //the calculated age of the profile 
+            //console.log((profile.birthDate as DateTime));
+
+            console.log(DateTime.now())
+            console.log(profile.birthDate)
+            console.log(profile.birthDate.year)
+            console.log(typeof(profile.birthDate))
+            console.log(<DateTime>profile.birthDate)
+            console.log(profile.birthDate.toString())
+            console.log(profile.birthDate.toISO.toString())
+            //let bdate:DateTime = DateTime.fromISO(profile.birthDate.toISO());
+            //console.log(bdate);
+
+            try{
+                const age = DateTime.now().diff(<DateTime>profile.birthDate);
+                console.log(age);
+            } catch (e) {
+                console.log(e);
+                res.status(400).send()
+                return
+            }
+            
+
+            res.status(200).send();
+            return
+
+            // const query:string = "SELECT * FROM " + `(${query1})` + ` as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid WHERE \
+            // ${} BETWEEN "Filters"."minAge" AND "Filters"."maxAge" \
+            // and ${profile.height} BETWEEN "Filters"."minHeight" AND "Filters"."maxHeight" \
+            // and ${profile.datingGoal} = "Filters"."datingGoal" \
+            // and "Filters".gender${gendertablestring} = 'true' \
+            // and 
+            // and "Filters".bt${profile.bodyType.toUpperCase()} = 'true' \
+            // LIMIT ${req.body.number};`
+
+            // console.log(query);
+
+            // const [results,metadata] = await sequelize.query(
+            //   query
+            // )
+            // console.log(results)
+
+            // //need to join with the filters table to make sure that you match their filters as well. 
+
+
+            // res.sendStatus(200);
 
 
             //join with account table to check if they are active recently? 

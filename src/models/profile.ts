@@ -13,7 +13,8 @@ import {
     ForeignKey,
     AllowNull,
     BelongsTo,
-    Default
+    Default,
+    Sequelize
 } from 'sequelize-typescript';
 import { Json } from 'sequelize/types/utils';
 import { DateTime } from "luxon";
