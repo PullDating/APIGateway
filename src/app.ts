@@ -2244,6 +2244,10 @@ app.get('/filter', async (req:Request, res: Response) => {
     }
 })
 
+function capitalizeFirstLetter(string:string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
 //return the top people that meet the user's filters. This one is going to require
 //the most thinking of how we want to do it. For now I'm going to implement the most 
 //simplistic version, where it only takes into account the filters applied. 
@@ -2414,66 +2418,56 @@ app.get('/people', async (req: Request, res: Response) => {
                 ${bodyTypeString}
               `
 
-            console.log(query1);
+            //TODO append to the table being created a column with the Distance between the two. 
 
-            const [results,metadata] = await sequelize.query(
-                query1
-              )
-              console.log(results)
-  
-              res.sendStatus(200);
-              return;
+            //need to make sure that you are in their filters as well
+            //need to convert profile.birthDate to an age.
 
-            // //TODO append to the table being created a column with the Distance between the two. 
+            //simple conversion from the database value string to the strings needed for the table query.
+            let gendertablestring:string = '';
+            if(profile.gender == 'man'){
+                gendertablestring = 'Man'
+            }else if(profile.gender == 'non-binary'){
+                gendertablestring = 'NonBinary'
+            }else if(profile.gender == 'woman'){
+                gendertablestring = 'Woman'
+            }
 
-            // //need to make sure that you are in their filters as well
-            // //need to convert profile.birthDate to an age.
+            //the calculated age of the profile 
+            //console.log((profile.birthDate as DateTime));
 
-            // //simple conversion from the database value string to the strings needed for the table query.
-            // let gendertablestring:string = '';
-            // if(profile.gender == 'man'){
-            //     gendertablestring = 'Man'
-            // }else if(profile.gender == 'non-binary'){
-            //     gendertablestring = 'NonBinary'
-            // }else if(profile.gender == 'woman'){
-            //     gendertablestring = 'Woman'
-            // }
-
-            // //the calculated age of the profile 
-            // //console.log((profile.birthDate as DateTime));
-
-            // //get the age of the person making the call. 
-            // const dur:Duration = DateTime.now().diff(DateTime.fromJSDate(profile.birthDate)); //this line is working.
-            // const age:number = dur.as('years')
-            // //console.log(dur);
-            // //console.log(age);
+            //get the age of the person making the call. 
+            const dur:Duration = DateTime.now().diff(DateTime.fromJSDate(profile.birthDate)); //this line is working.
+            const age:number = dur.as('years')
+            //console.log(dur);
+            //console.log(age);
             
 
-            // //their profile must also meet the following specifications of the people they're filtering (ordered.)
-            // //age
-            // //height
-            // //gender
-            // //distance
-            // //bodytype
-            // //Note: Don't need to handle datinggoal again, because they must have the exact same for the first query to succeed.
+            //their profile must also meet the following specifications of the people they're filtering (ordered.)
+            //age
+            //height
+            //gender
+            //distance
+            //bodytype
+            //Note: Don't need to handle datinggoal again, because they must have the exact same for the first query to succeed.
 
-            // const query:string = "SELECT * FROM " + `(${query1})` + ` as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid WHERE \
-            // ${age} BETWEEN "Filters"."minAge" AND "Filters"."maxAge" \
-            // and ${profile.height} BETWEEN "Filters"."minHeight" AND "Filters"."maxHeight" \
-            // and "Filters".gender${gendertablestring} = 'true' \ 
-            // and profileresult.distance <= "Filters"."maxDistance"\
-            // and "Filters".bt${profile.bodyType.toUpperCase()} = 'true' \
-            // LIMIT ${req.body.number};`
+            const query:string = "SELECT * FROM " + `(${query1})` + ` as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid WHERE \
+            ${age} BETWEEN "Filters"."minAge" AND "Filters"."maxAge" \
+            and ${profile.height} BETWEEN "Filters"."minHeight" AND "Filters"."maxHeight" \
+            and "Filters"."gender${gendertablestring}" = 'true' \ 
+            and profileresult.distance/1000 <= "Filters"."maxDistance"\
+            and "Filters"."bt${capitalizeFirstLetter(profile.bodyType)}" = 'true' \
+            LIMIT ${req.body.number};`
 
-            // console.log(query);
+            console.log(query);
 
-            // const [results,metadata] = await sequelize.query(
-            //   query
-            // )
-            // console.log(results)
+            const [results,metadata] = await sequelize.query(
+              query
+            )
+            console.log(results)
 
-            // res.sendStatus(200);
-            // return;
+            res.sendStatus(200);
+            return;
 
         } else {
             res.json({ message: "couldn't find the user's filters" })
