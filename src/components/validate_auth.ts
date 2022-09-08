@@ -26,7 +26,7 @@ export default async function validate_auth(uuid:string,token:string) : Promise<
         }
 
         //time check variables.
-        const expireTime:DateTime = search[0].expiry;
+        const expireTime:DateTime = DateTime.fromJSDate(search[0].expiry);
         const currentTime:DateTime = DateTime.now();
 
         //check if the token has expired.

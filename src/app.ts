@@ -40,7 +40,7 @@ import { BeforeValidate, DataType, Length } from 'sequelize-typescript';
 import validate_auth from './components/validate_auth';
 import upload_photo, {connect_minio, set_user_photos_from_path, get_user_photos, delete_files, get_num_images_from_imagePath, delete_file_in_minio } from './components/object_store/minio_utils';
 
-import { DateTime } from "luxon";
+import { DateTime, Duration } from "luxon";
 import { Json } from 'sequelize/types/utils';
 import { privateEncrypt } from 'crypto';
 
@@ -967,7 +967,7 @@ app.get('/auth/login', (req:Request, res:Response) => {
             // then also create an entry in the auth_tokens table, with that uuid to generate a token.
             const newAuth_Token = await Auth_Token.create({
                 uuid: newAccount.uuid,
-                expiry: DateTime.local().plus({months: 6})
+                expiry: DateTime.local().plus({months: 6}).toJSDate()
             })
             //then return the uuid and the token that have been found/generated to the user.
             res.status(200).send({
@@ -988,14 +988,14 @@ app.get('/auth/login', (req:Request, res:Response) => {
                 console.log("There was an error in authentication because an auth token was empty when it shouldn't be.");
                 res.status(400).send("There was an error with authentication, please contact a system admin.")
             }else{
-                if(newAuth_Token.expiry < DateTime.now()){
+                if(DateTime.fromJSDate(newAuth_Token.expiry) < DateTime.now()){
                     console.log("The auth token was expired, so a new one is being generated.")
                     //this means that it has expired. 
                     //delete the old entry, then create a new one with the same uuid and return that
                     await newAuth_Token.destroy();
                     const nonExpiredAuthToken = await Auth_Token.create({
                         uuid: account.uuid,
-                        expiry: DateTime.local().plus({months: 6})
+                        expiry: DateTime.local().plus({months: 6}).toJSDate()
                     })
                     //then return the uuid and the token that have been found/generated to the user.
                     res.status(200).send({
@@ -2313,12 +2313,10 @@ app.get('/people', async (req: Request, res: Response) => {
             //get the min and max birth dates from the ages.
             console.log(`maxAge: ${filter.maxAge}`);
             console.log(`minAge: ${filter.minAge}`);
-            const minBirthDate = DateTime.now().minus({years:filter.maxAge});
-            const maxBirthDate = DateTime.now().minus({years: filter.minAge});
+            const minBirthDate = DateTime.now().minus({years:filter.maxAge}).toJSDate();
+            const maxBirthDate = DateTime.now().minus({years: filter.minAge}).toJSDate();
             console.log(`maxBirthDate: ${maxBirthDate}`);
             console.log(`minBirthDate: ${minBirthDate}`);
-            console.log(`maxBirthDate: ${maxBirthDate.toISO()}`);
-            console.log(`minBirthDate: ${minBirthDate.toISO()}`);
 
             //generate gender string
             //form of : and ("gender" = 'gender1' or "gender"='gender2'...)
@@ -2399,61 +2397,71 @@ app.get('/people', async (req: Request, res: Response) => {
             bodyTypeString = `and (${bodyTypeString})`;
             console.log(`bodyTypeString: ${bodyTypeString}`);
 
-            const query1:string = `SELECT * FROM "Profiles" WHERE uuid != '${profile.uuid}'\
-                and "birthDate" BETWEEN '${minBirthDate}' and '${maxBirthDate}'\
+            console.log(profile.lastLocation.coordinates[0]) //longitude
+            console.log(profile.lastLocation.coordinates[1]) //latitude
+
+            // ST_SetSRID(ST_MakePoint(${profile.lastLocation.coordinates[0]}, ${profile.lastLocation.coordinates[1]}), 4326)
+            // ST_DistanceSphere(ST_GeomFromText('POINT( )')), geometry("lastLocation") )
+
+            const query1:string = `SELECT * , ST_DistanceSphere(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})'), geometry("lastLocation")) as "distance" \
+                FROM "Profiles" \
+                WHERE uuid != '${profile.uuid}'\
+                and "birthDate" BETWEEN '${DateTime.fromJSDate(minBirthDate)}' and '${DateTime.fromJSDate(maxBirthDate)}'\
                 and "height" BETWEEN '${filter.minHeight}' and '${filter.maxHeight}'\
                 and "datingGoal" = '${profile.datingGoal}'\
                 ${genderString}\
-                and ST_DistanceSphere(geometry(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})')), geometry("lastLocation")) <= '${filter.maxDistance}'\
+                and ST_DistanceSphere(geometry(ST_GeomFromText('POINT(${profile.lastLocation.coordinates[0]} ${profile.lastLocation.coordinates[1]})')), geometry("lastLocation"))/1000 <= '${filter.maxDistance}'\
                 ${bodyTypeString}
-              ` //working!
+              `
 
             console.log(query1);
 
-            //need to make sure that you are in their filters as well
-            //need to convert profile.birthDate to an age.
+            const [results,metadata] = await sequelize.query(
+                query1
+              )
+              console.log(results)
+  
+              res.sendStatus(200);
+              return;
 
-            let gendertablestring:string = '';
-            if(profile.gender == 'man'){
-                gendertablestring = 'Man'
-            }else if(profile.gender == 'non-binary'){
-                gendertablestring = 'NonBinary'
-            }else if(profile.gender == 'woman'){
-                gendertablestring = 'Woman'
-            }
+            // //TODO append to the table being created a column with the Distance between the two. 
 
-            //the calculated age of the profile 
-            //console.log((profile.birthDate as DateTime));
+            // //need to make sure that you are in their filters as well
+            // //need to convert profile.birthDate to an age.
 
-            console.log(DateTime.now())
-            console.log(profile.birthDate)
-            console.log(profile.birthDate.year)
-            console.log(typeof(profile.birthDate))
-            console.log(<DateTime>profile.birthDate)
-            console.log(profile.birthDate.toString())
-            console.log(profile.birthDate.toISO.toString())
-            //let bdate:DateTime = DateTime.fromISO(profile.birthDate.toISO());
-            //console.log(bdate);
+            // //simple conversion from the database value string to the strings needed for the table query.
+            // let gendertablestring:string = '';
+            // if(profile.gender == 'man'){
+            //     gendertablestring = 'Man'
+            // }else if(profile.gender == 'non-binary'){
+            //     gendertablestring = 'NonBinary'
+            // }else if(profile.gender == 'woman'){
+            //     gendertablestring = 'Woman'
+            // }
 
-            try{
-                const age = DateTime.now().diff(<DateTime>profile.birthDate);
-                console.log(age);
-            } catch (e) {
-                console.log(e);
-                res.status(400).send()
-                return
-            }
+            // //the calculated age of the profile 
+            // //console.log((profile.birthDate as DateTime));
+
+            // //get the age of the person making the call. 
+            // const dur:Duration = DateTime.now().diff(DateTime.fromJSDate(profile.birthDate)); //this line is working.
+            // const age:number = dur.as('years')
+            // //console.log(dur);
+            // //console.log(age);
             
 
-            res.status(200).send();
-            return
+            // //their profile must also meet the following specifications of the people they're filtering (ordered.)
+            // //age
+            // //height
+            // //gender
+            // //distance
+            // //bodytype
+            // //Note: Don't need to handle datinggoal again, because they must have the exact same for the first query to succeed.
 
             // const query:string = "SELECT * FROM " + `(${query1})` + ` as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid WHERE \
-            // ${} BETWEEN "Filters"."minAge" AND "Filters"."maxAge" \
+            // ${age} BETWEEN "Filters"."minAge" AND "Filters"."maxAge" \
             // and ${profile.height} BETWEEN "Filters"."minHeight" AND "Filters"."maxHeight" \
-            // and ${profile.datingGoal} = "Filters"."datingGoal" \
-            // and "Filters".gender${gendertablestring} = 'true' \
-            // and 
+            // and "Filters".gender${gendertablestring} = 'true' \ 
+            // and profileresult.distance <= "Filters"."maxDistance"\
             // and "Filters".bt${profile.bodyType.toUpperCase()} = 'true' \
             // LIMIT ${req.body.number};`
 
@@ -2464,23 +2472,9 @@ app.get('/people', async (req: Request, res: Response) => {
             // )
             // console.log(results)
 
-            // //need to join with the filters table to make sure that you match their filters as well. 
-
-
             // res.sendStatus(200);
+            // return;
 
-
-            //join with account table to check if they are active recently? 
-
-            //const query:string = `SELECT * FROM (SELECT * FROM "Profiles" WHERE uuid != ${profile.uuid} and "birthDate" >= ${filter.minBirthDate} and birthDate" <= ${filter.maxBirthDate} LIMIT 100) as profileresult LEFT JOIN "Filters" ON profileresult.uuid = "Filters".uuid) WHERE ${profile.birthDate} >= "minBirthDate" and ${profile.birthDate} <= "maxBirthDate" LIMIT ${req.body.number}`;
-            //const [results, metadata] = await sequelize.query(query1)
-
-            //const [results,metadata] = await sequelize.query(
-            //    "SELECT * FROM Filters JOIN Profiles ON Filters.uuid = Profiles.uuid"
-            //)
-            //console.log(results)
-
-            //res.json({ message: "REPLACE THIS" })
         } else {
             res.json({ message: "couldn't find the user's filters" })
         }

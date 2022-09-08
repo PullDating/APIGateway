@@ -38,5 +38,5 @@ export default class Auth_Token extends Model{
     //TODO add the default expiry date logic as the default?
     @AllowNull(false)
     @Column(DataType.DATE)
-    expiry!: DateTime;
+    expiry!: Date;
 }

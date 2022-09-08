@@ -37,7 +37,7 @@ export default class Profile extends Model{
     //the birthdate of the person, used to find the age
     @AllowNull(false)
     @Column(DataType.DATE)
-    birthDate!: DateTime;
+    birthDate!: Date;
 
     //the gender of the user
     @AllowNull(false)

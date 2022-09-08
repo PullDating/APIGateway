@@ -36,7 +36,7 @@ export default class Account extends Model{
     @AllowNull(false)
     @Default(Date.now)
     @Column(DataType.DATE)
-    last_active!: DateTime;
+    last_active!: Date;
 
     //the state of the account.
     // 0 : just created, profile not complete & not active
