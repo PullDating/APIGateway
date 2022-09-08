@@ -1624,9 +1624,10 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
     let authinputs:any = {
         "uuid" : req.headers.uuid,
         "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+        "target" : (req.headers.target != null)? req.headers.target : req.headers.uuid,
     }
 
-    let merged = {...authinputs, ...req.body}
+    let merged = {...authinputs}
 
     try {
         const value = await simple_get_schema.validateAsync(merged)
@@ -1698,12 +1699,8 @@ app.get('/profile', upload.none(), async (req: Request, res: Response) => {
             return
         }
     }
-
-    if (req.body.target) { //return the profile of the target
-        await Profile.findOne({ where: { uuid: req.body.target } }).then((profile) => callback(profile));
-    } else { //return the profile of the person that made the call
-        await Profile.findOne({ where: { uuid: req.headers.uuid } }).then((profile) => callback(profile));
-    }
+    await Profile.findOne({ where: { uuid: authinputs.target } }).then((profile) => callback(profile));
+    
 
 
 })
