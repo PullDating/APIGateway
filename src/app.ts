@@ -2457,6 +2457,7 @@ app.get('/people', async (req: Request, res: Response) => {
             and "Filters"."gender${gendertablestring}" = 'true' \ 
             and profileresult.distance/1000 <= "Filters"."maxDistance"\
             and "Filters"."bt${capitalizeFirstLetter(profile.bodyType)}" = 'true' \
+            ORDER BY RANDOM()\
             LIMIT ${req.body.number};`
 
             console.log(query);
@@ -2465,6 +2466,12 @@ app.get('/people', async (req: Request, res: Response) => {
               query
             )
             console.log(results)
+
+            //TODO modify the results to get the presigned urls for the images of the user OR strip everying but the uuid and make the frontend call get profile. 
+            
+            //I think send the uuid and the distance between them (or should we even do that?)
+            let returnList
+
 
             res.sendStatus(200);
             return;
