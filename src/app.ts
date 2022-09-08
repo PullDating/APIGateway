@@ -2460,20 +2460,29 @@ app.get('/people', async (req: Request, res: Response) => {
             ORDER BY RANDOM()\
             LIMIT ${req.body.number};`
 
-            console.log(query);
+            //console.log(query);
 
             const [results,metadata] = await sequelize.query(
               query
             )
-            console.log(results)
 
             //TODO modify the results to get the presigned urls for the images of the user OR strip everying but the uuid and make the frontend call get profile. 
             
-            //I think send the uuid and the distance between them (or should we even do that?)
-            let returnList
+            //I think send the uuid and xthe distance between them (or should we even do that?)
+            let returnList:any[] = [];
+            returnList = results as any[];
+            
+            for(let i = 0; i<returnList.length; i++){
+                returnList[i] = {
+                    uuid: returnList[i].uuid,
+                    distance: returnList[i].distance
+                }
+            }
+
+            console.log(returnList)
 
 
-            res.sendStatus(200);
+            res.status(200).json({returnList});
             return;
 
         } else {
