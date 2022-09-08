@@ -2256,31 +2256,45 @@ inputs:
 - number: 
 */
 app.get('/people', async (req: Request, res: Response) => {
-    //limit the number in the schema
 
+
+    console.log('get people requested');
     //authentication
-    if (req.headers.authorization == null) {
-        res.json({ error: "Authentication token was not supplied." });
+    if (req.headers.authorization == null || req.headers.uuid == null || req.headers.number == null) {
+        res.status(400).json({ error: "Authentication token or uuid or number was not supplied." });
         return
     }
-    //let value:any;
-    let value: any;
-    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+        "number" : req.headers.number
+    }
+
+    let merged = {...authinputs, ...req.body}
+
+    //schema validation
+    let value;
     try {
-        value = await get_people_schema.validateAsync(input)
+        value = await get_people_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
-        res.json({ error: "Inputs were invalid." });
+        res.status(400).json({ error: "Inputs were invalid." });
         return
     }
 
-    //console.log("Got past schema validation.")
+    console.log("Got past schema validation.")
 
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, authinputs.token);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -2288,19 +2302,57 @@ app.get('/people', async (req: Request, res: Response) => {
     }
     //if invalid, return without completing. 
     if (result != 0) {
-        res.json({ error: "Authentication was invalid, please re-authenticate." });
+        res.status(400).json({ error: "Authentication was invalid, please re-authenticate." });
         return
     }
 
+    //OLD AUTH STUFF BELOW HERE
+
+    //limit the number in the schema
+
+    //authentication
+    // if (req.headers.authorization == null) {
+    //     res.json({ error: "Authentication token was not supplied." });
+    //     return
+    // }
+    // //let value:any;
+    // let value: any;
+    // let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
+    // try {
+    //     value = await get_people_schema.validateAsync(input)
+    // } catch (err) {
+    //     console.log("did not pass schema validation.")
+    //     console.log(err)
+    //     res.json({ error: "Inputs were invalid." });
+    //     return
+    // }
+
+    // //console.log("Got past schema validation.")
+
+    // //verify that the two exist together in the auth table.
+    // let result: number = -1;
+    // try {
+    //     result = await validate_auth(req.body.uuid, req.headers.authorization!);
+    // } catch (err: any) {
+    //     console.error(err.stack);
+    //     res.status(500).json({ message: "Server error" });
+    //     return;
+    // }
+    // //if invalid, return without completing. 
+    // if (result != 0) {
+    //     res.json({ error: "Authentication was invalid, please re-authenticate." });
+    //     return
+    // }
+
     //function specific logic:
     //find the first (<=number) of people that match the dating goal from the profile, and the filters in the filter table.
-    const profile = await Profile.findOne({ where: { uuid: req.body.uuid } });
+    const profile = await Profile.findOne({ where: { uuid: req.headers.uuid } });
     if (profile) {
         //console.log(profile);
         //get the dating goal of the profile
         let datingGoal: string = profile.datingGoal
         //get the filters of that person
-        const filter = await Filter.findOne({ where: { uuid: req.body.uuid } });
+        const filter = await Filter.findOne({ where: { uuid: req.headers.uuid } });
         if (filter) {
             console.log("Both Filter and Profile exist, making call.")
             //now we need to find people who's profile matches their dating goal, and who meet's their filters. 
@@ -2458,7 +2510,7 @@ app.get('/people', async (req: Request, res: Response) => {
             and profileresult.distance/1000 <= "Filters"."maxDistance"\
             and "Filters"."bt${capitalizeFirstLetter(profile.bodyType)}" = 'true' \
             ORDER BY RANDOM()\
-            LIMIT ${req.body.number};`
+            LIMIT ${req.headers.number};`
 
             //console.log(query);
 
