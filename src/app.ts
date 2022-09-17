@@ -839,7 +839,6 @@ const swipe_schema = Joi.object({
     uuid: Joi.string().guid().required(),
     target_uuid: Joi.string().guid().required(),
     type: Joi.number().valid(0, 1, 3, 4).required(),
-    datingGoal: datingGoal_base.required()
 });
 
 const age_base = Joi.number().min(18).max(100)
@@ -1798,11 +1797,29 @@ app.post('/swipe', async (req: Request, res: Response) => {
         res.json({ error: "Authentication token was not supplied." });
         return
     }
+
+    if(typeof req.headers.uuid !== 'string'){
+        res.status(400).json({error : "uuid was not supplied correctly."})
+        return
+    }
+
+    let authinputs:any = {
+        "uuid" : req.headers.uuid,
+        "token" : req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1),
+    }
+
+    console.log("Req.body:")
+    console.log(req.body);
+
+    let merged = {...authinputs, ...req.body}
+
+    console.log("merged")
+    console.log(merged)
+
     //let value:any;
     let value: any;
-    let input = Object.assign(req.body, { token: req.headers.authorization.substring(req.headers.authorization.indexOf(' ') + 1) });
     try {
-        value = await swipe_schema.validateAsync(input)
+        value = await swipe_schema.validateAsync(merged)
     } catch (err) {
         console.log("did not pass schema validation.")
         console.log(err)
@@ -1815,7 +1832,7 @@ app.post('/swipe', async (req: Request, res: Response) => {
     //verify that the two exist together in the auth table.
     let result: number = -1;
     try {
-        result = await validate_auth(req.body.uuid, req.headers.authorization!);
+        result = await validate_auth(authinputs.uuid, req.headers.authorization!);
     } catch (err: any) {
         console.error(err.stack);
         res.status(500).json({ message: "Server error" });
@@ -1834,32 +1851,32 @@ app.post('/swipe', async (req: Request, res: Response) => {
     //we keep track of both entries becuase we want to have a sense of possession as well as state.
 
     //get the datinggoal of the person sending the request:
-    await Profile.findOne({ attributes: ['datingGoal'], where: { uuid: req.body.uuid } }).then(async (profile) => {
+    await Profile.findOne({ attributes: ['datingGoal'], where: { uuid: authinputs.uuid } }).then(async (profile) => {
         if (profile) {//found profile
             let datingGoal = profile.datingGoal
             //now that we have verified the dating goal, determine if they have sent a swipe of this type and if they've received it
-            const sentswipe = await Swipe.findOne({ where: { uuid: req.body.uuid, target_uuid: req.body.target_uuid, datingGoal: datingGoal } });
-            const receivedswipe = await Swipe.findOne({ where: { uuid: req.body.target_uuid, target_uuid: req.body.uuid, datingGoal: datingGoal} });
+            const sentswipe = await Swipe.findOne({ where: { uuid: authinputs.uuid, target_uuid: req.body.target_uuid} });
+            const receivedswipe = await Swipe.findOne({ where: { uuid: req.body.target_uuid, target_uuid: authinputs.uuid} });
 
             //now do the logic based on these values.
             //2 is not possible because you cannot force a match, it is done through likes. 
             switch (req.body.type) {
                 case 0: //dislike
+                    console.log("dislike created")
                     if (!sentswipe) { //if no previous swipe, send a dislike. 
                         Swipe.create({
                             target_uuid: req.body.target_uuid,
-                            uuid: req.body.uuid,
+                            uuid: authinputs.uuid,
                             type: 0,
-                            datingGoal: datingGoal
                         }).then(() => {
-                            res.json({message: "dislike sent"})
+                            res.status(200).json({message: "dislike sent"})
                         })
                     } else {
                         res.json({error: "a previous swipe existed, thus you shouldn't have been shown this. Please report"})
                     }
                     break;
                 case 1: //like
-                    
+                    console.log("like called");
                     function create_match_callback() {
                         if (receivedswipe && receivedswipe['type'] == 1) {
                             //congrats, you have a match.
@@ -1871,40 +1888,37 @@ app.post('/swipe', async (req: Request, res: Response) => {
                                 {
                                     where: {
                                         target_uuid: req.body.target_uuid,
-                                        uuid: req.body.uuid,
-                                        datingGoal: datingGoal
+                                        uuid: authinputs.uuid,
                                     }
                                 }
                             ).then(() => {
-                                //update their like to a match.
+                                //update the other person's like to a match.
                                 Swipe.update(
                                     {
                                         type: 2
                                     },
                                     {
                                         where: {
-                                            target_uuid: req.body.uuid,
+                                            target_uuid: authinputs.uuid,
                                             uuid: req.body.target_uuid,
-                                            datingGoal: datingGoal
                                         }
                                     }
                                 ).then(() => {
-                                    res.json({message: "match created!"})
+                                    res.status(201).json({message: "match created!"})
                                     return
                                 })
                             })
                             
                         }else{
-                            res.json({message: "like created"})
+                            res.status(202).json({message: "like created"})
                         }
                     }
 
                     if (!sentswipe) { //if no previous swipe, send a like
                         Swipe.create({
                             target_uuid: req.body.target_uuid,
-                            uuid: req.body.uuid,
+                            uuid: authinputs.uuid,
                             type: 1,
-                            datingGoal: datingGoal
                         }).then(() => create_match_callback)
                         //then see if the other person has liked you
                     } else if (sentswipe && sentswipe!['type'] == 0) { //allow them to upgrade a dislike to a like.
@@ -1915,8 +1929,7 @@ app.post('/swipe', async (req: Request, res: Response) => {
                             {
                                 where: {
                                     target_uuid: req.body.target_uuid,
-                                    uuid: req.body.uuid,
-                                    datingGoal: datingGoal
+                                    uuid: authinputs.uuid,
                                 }
                             }
                         ).then(() => create_match_callback)
@@ -1930,8 +1943,7 @@ app.post('/swipe', async (req: Request, res: Response) => {
                         {
                             where: {
                                 target_uuid: req.body.target_uuid,
-                                uuid: req.body.uuid,
-                                datingGoal: datingGoal
+                                uuid: authinputs.uuid,
                             }
                         }
                     ).then(() => {
@@ -1941,9 +1953,8 @@ app.post('/swipe', async (req: Request, res: Response) => {
                             },
                             {
                                 where: {
-                                    target_uuid: req.body.uuid,
+                                    target_uuid: authinputs.uuid,
                                     uuid: req.body.target_uuid,
-                                    datingGoal: datingGoal
                                 }
                             }
                         ).then(() => {
@@ -1960,9 +1971,8 @@ app.post('/swipe', async (req: Request, res: Response) => {
                         if (!sentswipe) {
                             Swipe.create({
                                 target_uuid: req.body.target_uuid,
-                                uuid: req.body.uuid,
+                                uuid: authinputs.uuid,
                                 type: 4,
-                                datingGoal: datingGoal
                             }).then(() => {
                                 res.json({message: "user blocked"})
                             })
@@ -1974,8 +1984,7 @@ app.post('/swipe', async (req: Request, res: Response) => {
                                 {
                                     where: {
                                         target_uuid: req.body.target_uuid,
-                                        uuid: req.body.uuid,
-                                        datingGoal: datingGoal
+                                        uuid: authinputs.uuid,
                                     }
                                 }
                             ).then(()=> {
@@ -1993,8 +2002,7 @@ app.post('/swipe', async (req: Request, res: Response) => {
                             {
                                 where: {
                                     uuid: req.body.target_uuid,
-                                    target_uuid: req.body.uuid,
-                                    datingGoal: datingGoal
+                                    target_uuid: authinputs.uuid,
                                 }
                             }
                         ).then(() => block_callback)
@@ -2527,9 +2535,12 @@ app.get('/people', async (req: Request, res: Response) => {
                     distance: returnList[i].distance
                 }
             }
-
             console.log(returnList)
 
+            if(returnList.length == 0){
+                res.status(201).send();
+                return;
+            }
 
             res.status(200).json({returnList});
             return;

@@ -32,6 +32,7 @@ export async function dbInitialize():Promise<Sequelize> {
     console.log("created sequelize object");
     try {
         Account.sync();
+        Swipe.sync();
         return await sequelize.authenticate().then(() => sequelize.sync({ alter: true }));
     } catch (error) {
         console.error('Unable to connect to db:', error);

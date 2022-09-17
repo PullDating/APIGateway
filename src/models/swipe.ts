@@ -1,4 +1,5 @@
 import { allowedNodeEnvironmentFlags } from 'process';
+import {v4 as uuidv4} from 'uuid';
 import {
     Column,
     Table,
@@ -11,6 +12,7 @@ import {
     AutoIncrement,
     ForeignKey,
     AllowNull,
+    Default
 } from 'sequelize-typescript';
 import { Json } from 'sequelize/types/utils';
 
@@ -19,14 +21,21 @@ import { Json } from 'sequelize/types/utils';
 @Table({ timestamps: true })
 export default class Swipe extends Model{
 
+    //just a unique id for the swipe
+    @PrimaryKey
+    @AllowNull(false)
+    @Default(uuidv4())
+    @Column(DataType.UUID)
+    swipe_id!: string;
+
     //The person who was the target of the interaction (ie the person getting swiped on, matched with, blocked etc.)
     @AllowNull(false)
-    @Column({primaryKey: true, type: DataType.UUID})
+    @Column({type: DataType.UUID})
     target_uuid!: string;
 
     //The person who initated the interaction. 
     @AllowNull(false)
-    @Column({primaryKey: true, type: DataType.UUID})
+    @Column({type: DataType.UUID})
     uuid!: string;
 
     //Represents the state of the interaction between two people
@@ -40,10 +49,6 @@ export default class Swipe extends Model{
     @AllowNull(false)
     @Column(DataType.INTEGER)
     type!: number;
-
-    @AllowNull(false)
-    @Column(DataType.STRING)
-    datingGoal!: string
 
     @CreatedAt
     creation_date!: Date;
