@@ -3,7 +3,7 @@ import helmet, { permittedCrossDomainPolicies } from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import { dbInitialize } from './db-connect';
-import router from './router';
+//import router from './router';
 
 import { SERVICE_PORT } from "./config/vars";
 
@@ -73,7 +73,8 @@ app.use(compression());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/', router);
+//app.use('/', router);
+
 
 
 
@@ -84,6 +85,7 @@ let sequelize: Sequelize;
 //imports required for websocket functionality.
 import { WebSocketServer } from 'ws';
 import * as http from 'http';
+import { hasUncaughtExceptionCaptureCallback } from 'process';
 //create an http server using the express app.
 const server = http.createServer(app);
 //create a new websocket server using the http server.
@@ -1877,8 +1879,10 @@ app.post('/swipe', async (req: Request, res: Response) => {
                     break;
                 case 1: //like
                     console.log("like called");
-                    function create_match_callback() {
+                    async function create_match_callback() : Promise<boolean>{
+                        console.log("Got in the create match callback.")
                         if (receivedswipe && receivedswipe['type'] == 1) {
+                            console.log("Looks like a match is going to be formed.")
                             //congrats, you have a match.
                             //update your like to a match.
                             Swipe.update(
@@ -1905,21 +1909,27 @@ app.post('/swipe', async (req: Request, res: Response) => {
                                     }
                                 ).then(() => {
                                     res.status(201).json({message: "match created!"})
-                                    return
+                                    return true;
                                 })
                             })
-                            
                         }else{
+                            console.log("simply going to create a like, no match formed.");
                             res.status(202).json({message: "like created"})
+                            return false;
                         }
+                        console.log("should never reach this point in execution.")
+                        throw new Error("got to an invalid location in create_match_callback()")
                     }
 
                     if (!sentswipe) { //if no previous swipe, send a like
+                        console.log("sentswipe was null")
                         Swipe.create({
                             target_uuid: req.body.target_uuid,
                             uuid: authinputs.uuid,
                             type: 1,
-                        }).then(() => create_match_callback)
+                        }).then(async () => await create_match_callback())
+                        return;
+                        console.log("called the create match callback, now just waiting for it to finish.")
                         //then see if the other person has liked you
                     } else if (sentswipe && sentswipe!['type'] == 0) { //allow them to upgrade a dislike to a like.
                         Swipe.update(
@@ -1933,7 +1943,11 @@ app.post('/swipe', async (req: Request, res: Response) => {
                                 }
                             }
                         ).then(() => create_match_callback)
+                    } else {
+                        console.log(sentswipe);
+                        res.status(400).json({"error" : "Edge condition, please fix."})
                     }
+                    console.log("reached the end of the like section...")
                     break;
                 case 3: //unmatch
                     //update both entries to unmatched. sad...
@@ -2014,12 +2028,10 @@ app.post('/swipe', async (req: Request, res: Response) => {
             }
 
         } else { //return an error.
-            res.json({ error: "could not find a profile that matched the uuid " })
+            res.status(400).json({ error: "could not find a profile that matched the uuid " })
             return
         }
-
     });
-    res.json({ message: "Swipe Executed" });
 });
 
 app.post('/filter', async (req: Request, res: Response) => {
